@@ -1,0 +1,59 @@
+[project]
+name = "noradar-content-engine"
+version = "2.0.0"
+description = "Content Engine pour la génération automatisée de vidéos marketing NoRadar"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+authors = [
+    {name = "Vincent", email = "vincent@noradar.fr"}
+]
+
+dependencies = [
+    "google-generativeai>=0.8.0",      # Gemini API
+    "google-cloud-texttospeech>=2.16.0", # Google Cloud TTS
+    "google-api-python-client>=2.100.0", # Google Drive API
+    "google-auth-oauthlib>=1.1.0",
+    "google-auth-httplib2>=0.2.0",
+    "openai-whisper>=20231117",         # Transcription pour sous-titres
+    "ffmpeg-python>=0.2.0",             # Montage vidéo
+    "pydantic>=2.5.0",                  # Modèles de données
+    "pydantic-settings>=2.1.0",         # Configuration
+    "typer>=0.9.0",                     # CLI
+    "rich>=13.7.0",                     # Logs jolis
+    "python-dotenv>=1.0.0",             # Variables d'environnement
+    "httpx>=0.25.0",                    # HTTP client async
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
+    "black>=23.0.0",
+    "ruff>=0.1.0",
+    "mypy>=1.7.0",
+]
+
+[project.scripts]
+content-engine = "src.main:app"
+
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*"]
+
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+
+[tool.ruff]
+line-length = 100
+select = ["E", "F", "I", "N", "W"]
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_ignores = true
