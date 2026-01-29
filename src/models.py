@@ -11,13 +11,14 @@ import uuid
 
 
 class VideoFormat(str, Enum):
-    """Les 5 formats de contenu NoRadar."""
+    """Les 6 formats de contenu NoRadar."""
 
     SCANDALE = "scandale"  # Viral, polémique
     TUTO = "tuto"  # Éducatif, conversion
     TEMOIGNAGE = "temoignage"  # Preuve sociale
     MYTHE = "mythe"  # Démystification
     CHIFFRE_CHOC = "chiffre_choc"  # Hook rapide
+    ULTRA_COURT = "ultra_court"  # Format 15 sec, percutant
 
 
 class VideoStatus(str, Enum):
@@ -47,6 +48,19 @@ class Script(BaseModel):
     @property
     def filename(self) -> str:
         return f"{self.format.value}_{self.id}.json"
+
+    @property
+    def tracking_id(self) -> str:
+        """ID de tracking unique pour cette vidéo."""
+        return f"vid_{self.format.value}_{self.id}"
+
+    @property
+    def telegram_link(self) -> str:
+        """Lien Telegram avec tracking."""
+        from src.config import settings
+        if settings.tracking_enabled:
+            return f"https://t.me/{settings.telegram_bot_username}?start={self.tracking_id}"
+        return f"https://t.me/{settings.telegram_bot_username}"
 
 
 class AudioFile(BaseModel):

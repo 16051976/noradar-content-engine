@@ -5,7 +5,10 @@ Générateur de voix avec Google Cloud Text-to-Speech.
 from pathlib import Path
 from typing import Optional
 from google.cloud import texttospeech
+from google.api_core.exceptions import ResourceExhausted, ServiceUnavailable, DeadlineExceeded
 from rich.console import Console
+
+from src.utils.retry import with_retry
 
 from src.config import settings
 from src.models import Script, AudioFile
@@ -18,7 +21,7 @@ FRENCH_VOICES = {
     # Voix Wavenet (très naturelles)
     "wavenet_male": "fr-FR-Wavenet-B",
     "wavenet_female": "fr-FR-Wavenet-A",
-    "wavenet_male_2": "fr-FR-Wavenet-D",
+    "wavenet_male_2": "fr-FR-Neural2-D",
     "wavenet_female_2": "fr-FR-Wavenet-C",
     # Voix Neural2 (très naturelles, plus récentes)
     "neural2_male": "fr-FR-Neural2-B",
@@ -38,6 +41,11 @@ class VoiceGenerator:
         # Le client utilise GOOGLE_APPLICATION_CREDENTIALS automatiquement
         self.client = texttospeech.TextToSpeechClient()
         self.default_voice = settings.tts_voice_name
+
+    @with_retry(exceptions=(ResourceExhausted, ServiceUnavailable, DeadlineExceeded))
+    def _synthesize(self, **kwargs):
+        """Appel TTS avec retry automatique."""
+        return self.client.synthesize_speech(**kwargs)
 
     def list_voices(self, language_code: str = "fr-FR") -> list[str]:
         """Liste les voix disponibles pour une langue."""
@@ -98,7 +106,7 @@ class VoiceGenerator:
         )
 
         # Génération
-        response = self.client.synthesize_speech(
+        response = self._synthesize(
             input=synthesis_input,
             voice=voice,
             audio_config=audio_config,
@@ -185,7 +193,7 @@ class VoiceGenerator:
             pitch=settings.tts_pitch,
         )
 
-        response = self.client.synthesize_speech(
+        response = self._synthesize(
             input=synthesis_input,
             voice=voice,
             audio_config=audio_config,

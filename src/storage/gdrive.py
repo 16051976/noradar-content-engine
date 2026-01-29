@@ -10,8 +10,11 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload
 from rich.console import Console
+
+from src.utils.retry import with_retry
 
 from src.config import settings
 from src.models import Video, VideoStatus
@@ -32,40 +35,36 @@ class GoogleDriveSync:
 
     def _get_credentials(self) -> Credentials:
         """Obtient ou rafraîchit les credentials OAuth."""
-        creds = None
-        token_path = Path("credentials/token.pickle")
-        credentials_path = Path(settings.gdrive_credentials_path)
-
-        # Charger le token existant
-        if token_path.exists():
-            with open(token_path, "rb") as token:
-                creds = pickle.load(token)
-
-        # Rafraîchir ou créer les credentials
-        if not creds or not creds.valid:
-            if creds and creds.expired and creds.refresh_token:
-                creds.refresh(Request())
-            else:
-                if not credentials_path.exists():
-                    raise FileNotFoundError(
-                        f"Fichier credentials non trouvé : {credentials_path}\n"
-                        "1. Va sur https://console.cloud.google.com/apis/credentials\n"
-                        "2. Crée un OAuth 2.0 Client ID (Desktop app)\n"
-                        "3. Télécharge le JSON et place-le dans credentials/gdrive_credentials.json"
-                    )
-
-                flow = InstalledAppFlow.from_client_secrets_file(
-                    str(credentials_path),
-                    SCOPES,
-                )
-                creds = flow.run_local_server(port=0)
-
-            # Sauvegarder le token
-            token_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(token_path, "wb") as token:
-                pickle.dump(creds, token)
-
+        import json
+        
+        token_path = Path("credentials/gdrive_token.json")
+        
+        if not token_path.exists():
+            raise FileNotFoundError(
+                f"Token non trouvé : {token_path}\n"
+                "Lance d abord : python3 gdrive_auth.py"
+            )
+        
+        with open(token_path) as f:
+            token_data = json.load(f)
+        
+        creds = Credentials.from_authorized_user_info(token_data, SCOPES)
+        
+        if creds and creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+            with open(token_path, "w") as f:
+                f.write(creds.to_json())
+        
         return creds
+
+    @with_retry(exceptions=(HttpError,))
+    def _execute_upload(self, file_metadata, media):
+        """Upload Google Drive avec retry automatique."""
+        return (
+            self.service.files()
+            .create(body=file_metadata, media_body=media, fields="id, webViewLink")
+            .execute()
+        )
 
     def ensure_folder(self, folder_name: str = "NoRadar-Videos") -> str:
         """
@@ -131,15 +130,7 @@ class GoogleDriveSync:
             resumable=True,
         )
 
-        file = (
-            self.service.files()
-            .create(
-                body=file_metadata,
-                media_body=media,
-                fields="id, webViewLink",
-            )
-            .execute()
-        )
+        file = self._execute_upload(file_metadata, media)
 
         video.gdrive_url = file.get("webViewLink")
         video.status = VideoStatus.UPLOADED

@@ -50,11 +50,15 @@ class ContentOrchestrator:
         console.print(f"[yellow]HOOK:[/yellow] {script.hook}")
         console.print(f"[yellow]BODY:[/yellow] {script.body[:200]}...")
         console.print(f"[yellow]CTA:[/yellow] {script.cta}")
+        if settings.tracking_enabled:
+            console.print(f"[cyan]🔗 Lien trackable : {script.telegram_link}[/cyan]")
         return script
 
     def produce_video(self, format, theme=None, background_image=None, upload=False):
         script = self.script_generator.generate(format, theme)
         self.script_generator.save_script(script)
+        if settings.tracking_enabled:
+            console.print(f"[cyan]🔗 Lien trackable : {script.telegram_link}[/cyan]")
         audio = self.voice_generator.generate_from_script(script)
         video = self.video_pipeline.process(script, audio, background_image)
         if upload:

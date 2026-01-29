@@ -27,9 +27,12 @@ class Settings(BaseSettings):
     google_application_credentials: str = Field(
         default="", description="Chemin vers le fichier credentials.json"
     )
-    tts_voice_name: str = Field(default="fr-FR-Wavenet-D", description="Voix TTS à utiliser")
+    tts_voice_name: str = Field(default="fr-FR-Neural2-D", description="Voix TTS à utiliser")
     tts_speaking_rate: float = Field(default=1.1, description="Vitesse de parole (0.25-4.0)")
     tts_pitch: float = Field(default=0.0, description="Pitch de la voix (-20.0 à 20.0)")
+
+    # === Pexels API (Vidéos de fond) ===
+    pexels_api_key: str = Field(default="", description="Clé API Pexels (gratuite)")
 
     # === Google Drive (Stockage) ===
     gdrive_folder_id: str = Field(default="", description="ID du dossier Google Drive cible")
@@ -49,13 +52,33 @@ class Settings(BaseSettings):
     video_fps: int = Field(default=30, description="FPS de la vidéo")
     video_format: str = Field(default="mp4", description="Format de sortie vidéo")
 
+    # === Watermark Settings ===
+    watermark_enabled: bool = Field(default=True, description="Activer le watermark")
+    watermark_text: str = Field(default="@NoRadarApp", description="Texte du watermark")
+    watermark_position: str = Field(default="top_right", description="Position: top_left, top_right, bottom_left, bottom_right")
+    watermark_font_size: int = Field(default=36, description="Taille police watermark")
+
+    # === Pexels Cache Settings ===
+    pexels_cache_enabled: bool = Field(default=True, description="Activer le cache local Pexels")
+    pexels_cache_dir: Path = Field(default=Path("cache/pexels"), description="Dossier du cache Pexels")
+    pexels_cache_max_videos: int = Field(default=50, description="Nombre max de vidéos en cache")
+
+    # === Retry Settings ===
+    retry_enabled: bool = Field(default=True, description="Activer le retry automatique")
+    retry_max_attempts: int = Field(default=3, description="Nombre max de tentatives")
+    retry_backoff_seconds: float = Field(default=2.0, description="Délai initial entre tentatives")
+
+    # === Tracking Settings ===
+    tracking_enabled: bool = Field(default=True, description="Activer le tracking UTM")
+    telegram_bot_username: str = Field(default="noradar_bot", description="Username du bot Telegram (sans @)")
+
     # === Subtitles Settings ===
-    subtitle_font: str = Field(default="Arial", description="Police des sous-titres")
-    subtitle_font_size: int = Field(default=60, description="Taille de police")
+    subtitle_font: str = Field(default="Arial Black", description="Police des sous-titres")
+    subtitle_font_size: int = Field(default=80, description="Taille de police (TikTok style)")
     subtitle_color: str = Field(default="white", description="Couleur du texte")
     subtitle_outline_color: str = Field(default="black", description="Couleur du contour")
-    subtitle_outline_width: int = Field(default=3, description="Épaisseur du contour")
-    subtitle_position: str = Field(default="bottom", description="Position (top/center/bottom)")
+    subtitle_outline_width: int = Field(default=5, description="Épaisseur du contour")
+    subtitle_position: str = Field(default="center", description="Position (top/center/bottom)")
 
     # === Production Settings ===
     batch_size: int = Field(default=5, description="Nombre de vidéos par batch")
@@ -70,7 +93,15 @@ class Settings(BaseSettings):
         (self.output_dir / "scripts").mkdir(exist_ok=True)
         (self.output_dir / "audio").mkdir(exist_ok=True)
         (self.output_dir / "videos").mkdir(exist_ok=True)
+        (self.output_dir / "subtitles").mkdir(exist_ok=True)
         (self.output_dir / "ready").mkdir(exist_ok=True)
+        
+        # Sous-dossiers temp
+        (self.temp_dir / "video_work").mkdir(exist_ok=True)
+
+        # Cache Pexels
+        if self.pexels_cache_enabled:
+            self.pexels_cache_dir.mkdir(parents=True, exist_ok=True)
 
 
 # Singleton
