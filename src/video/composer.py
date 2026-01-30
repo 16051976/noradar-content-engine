@@ -321,6 +321,15 @@ class VideoComposerPro:
         self.height = settings.video_height
     
     def get_background_video(self, format_type: str, duration: float) -> Path:
+        # 0. Vidéos locales assets (priorité absolue)
+        local_bg_dir = Path("assets/backgrounds")
+        if local_bg_dir.exists():
+            local_videos = list(local_bg_dir.glob("*.mp4"))
+            if local_videos:
+                chosen = random.choice(local_videos)
+                console.print(f"[green]✓ Fond local: {chosen.name}[/green]")
+                return chosen
+
         # 1. Local
         local = self._find_local_video(format_type)
         if local:
