@@ -329,7 +329,7 @@ class VideoComposerPro:
         
         # 1.5 Cache Pexels persistant
         if settings.pexels_cache_enabled:
-            cached = self._find_cached_pexels()
+            cached = self._find_cached_pexels(format_type)
             if cached:
                 console.print(f"[green]✓ Cache Pexels persistant: {cached.name}[/green]")
                 return cached
@@ -349,7 +349,7 @@ class VideoComposerPro:
                 dl = self.pexels.download_video(v, path)
                 if dl:
                     console.print(f"[green]✓ Pexels téléchargé: {path.name}[/green]")
-                    self._save_to_pexels_cache(dl)
+                    self._save_to_pexels_cache(dl, format_type)
                     return dl
             else:
                 console.print("[yellow]Pexels: aucune vidéo trouvée[/yellow]")
@@ -382,9 +382,9 @@ class VideoComposerPro:
         ], capture_output=True, timeout=60)
         return out
     
-    def _find_cached_pexels(self) -> Optional[Path]:
-        """Cherche une vidéo dans le cache Pexels persistant."""
-        cache_dir = settings.pexels_cache_dir
+    def _find_cached_pexels(self, format_type: str) -> Optional[Path]:
+        """Cherche une vidéo dans le cache Pexels persistant par format."""
+        cache_dir = settings.pexels_cache_dir / format_type
         if not cache_dir.exists():
             return None
         candidates = list(cache_dir.glob("*.mp4"))
@@ -392,12 +392,12 @@ class VideoComposerPro:
             return None
         return random.choice(candidates)
 
-    def _save_to_pexels_cache(self, source: Path) -> None:
-        """Copie une vidéo téléchargée dans le cache persistant."""
+    def _save_to_pexels_cache(self, source: Path, format_type: str) -> None:
+        """Copie une vidéo téléchargée dans le cache persistant par format."""
         if not settings.pexels_cache_enabled:
             return
         import shutil
-        cache_dir = settings.pexels_cache_dir
+        cache_dir = settings.pexels_cache_dir / format_type
         cache_dir.mkdir(parents=True, exist_ok=True)
         dest = cache_dir / source.name
         if not dest.exists():
