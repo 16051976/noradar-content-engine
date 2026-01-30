@@ -28,18 +28,14 @@ LOCAL_VIDEO_CATEGORIES = {
     "chiffre_choc": ["money", "euro", "wallet", "cash"],
 }
 
-# Mots-clés Pexels - TOUJOURS liés à la route/conduite (cohérence NoRadar)
-PEXELS_KEYWORDS = [
-    "car driving highway",
-    "traffic city night",
-    "road driving pov",
-    "car dashboard driving",
-    "highway traffic",
-    "speed limit road sign",
-    "car street night lights",
-    "driving rain windshield",
-    "urban traffic timelapse",
-]
+# Mots-clés Pexels par format - fonds variés selon le type de contenu
+PEXELS_KEYWORDS = {
+    "scandale": ["police car", "speed camera", "traffic radar", "highway patrol", "speed trap"],
+    "tuto": ["smartphone hand", "typing phone", "mobile app", "document desk", "paperwork"],
+    "temoignage": ["happy driver", "car keys", "relieved person", "thumbs up", "success celebration"],
+    "mythe": ["question mark", "thinking person", "confused", "lightbulb idea", "mystery"],
+    "chiffre_choc": ["money euros", "calculator", "statistics", "numbers screen", "finance graph"],
+}
 
 GRADIENT_COLORS = {
     "scandale": ("#FF4B4B", "#8B0000"),
@@ -340,7 +336,8 @@ class VideoComposerPro:
 
         # 2. Pexels
         if self.pexels.api_key:
-            query = random.choice(PEXELS_KEYWORDS)
+            keywords = PEXELS_KEYWORDS.get(format_type, PEXELS_KEYWORDS["tuto"])
+            query = random.choice(keywords)
             console.print(f"[blue]Pexels: '{query}'...[/blue]")
             videos = self.pexels.search_videos(query)
             if videos:
