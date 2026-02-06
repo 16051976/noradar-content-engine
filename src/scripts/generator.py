@@ -640,11 +640,11 @@ class ScriptGenerator:
                 max_allowed = MAX_WORDS.get(format.value, 85)
 
                 if word_count > max_allowed:
-                    if attempt < max_attempts - 1:
-                        console.print(f"[yellow]⚠ Script trop long : {word_count} mots (max {max_allowed}), retry ({attempt + 2}/{max_attempts})...[/yellow]")
-                        continue
-                    else:
-                        console.print(f"[yellow]⚠ Script {word_count} mots après {max_attempts} tentatives, on garde[/yellow]")
+                    # Couper le body pour respecter la limite
+                    words = script.body.split()
+                    target_body_words = max_allowed - len(script.hook.split()) - len(script.cta.split())
+                    script.body = " ".join(words[:target_body_words])
+                    console.print(f"[yellow]⚠ Script tronqué à {max_allowed} mots[/yellow]")
 
                 # Anti-doublon : vérifier que le hook est différent
                 hook_normalized = script.hook.strip().lower()
