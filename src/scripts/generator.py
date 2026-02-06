@@ -629,15 +629,15 @@ class ScriptGenerator:
                 word_count = len(full_text.split())
 
                 MAX_WORDS = {
-                    "scandale": 65,
-                    "tuto": 65,
-                    "temoignage": 65,
-                    "mythe": 60,
-                    "chiffre_choc": 50,
-                    "vrai_faux": 55
+                    "scandale": 55,
+                    "tuto": 55,
+                    "temoignage": 55,
+                    "mythe": 50,
+                    "chiffre_choc": 45,
+                    "vrai_faux": 48
                 }
 
-                max_allowed = MAX_WORDS.get(format.value, 65)
+                max_allowed = MAX_WORDS.get(format.value, 55)
 
                 if word_count > max_allowed:
                     # Couper le body pour respecter la limite
