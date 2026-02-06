@@ -624,20 +624,20 @@ class ScriptGenerator:
                     facebook_caption=data.get("facebook_caption", ""),
                 )
 
-                # Validation durée post-génération
-                body_text = script.body
-                word_count = len(body_text.split())
+                # Compter TOUT le texte qui sera lu (hook + body + cta)
+                full_text = f"{script.hook} {script.body} {script.cta}"
+                word_count = len(full_text.split())
 
                 MAX_WORDS = {
-                    "scandale": 65,
-                    "tuto": 65,
-                    "temoignage": 65,
-                    "mythe": 55,
-                    "chiffre_choc": 45,
-                    "vrai_faux": 50
+                    "scandale": 85,
+                    "tuto": 85,
+                    "temoignage": 85,
+                    "mythe": 70,
+                    "chiffre_choc": 60,
+                    "vrai_faux": 65
                 }
 
-                max_allowed = MAX_WORDS.get(format.value, 90)
+                max_allowed = MAX_WORDS.get(format.value, 85)
 
                 if word_count > max_allowed:
                     if attempt < max_attempts - 1:
