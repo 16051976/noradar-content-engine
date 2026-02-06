@@ -624,6 +624,28 @@ class ScriptGenerator:
                     facebook_caption=data.get("facebook_caption", ""),
                 )
 
+                # Validation durée post-génération
+                body_text = script.body
+                word_count = len(body_text.split())
+
+                MAX_WORDS = {
+                    "scandale": 90,
+                    "tuto": 90,
+                    "temoignage": 90,
+                    "mythe": 70,
+                    "chiffre_choc": 55,
+                    "vrai_faux": 55
+                }
+
+                max_allowed = MAX_WORDS.get(format.value, 90)
+
+                if word_count > max_allowed:
+                    if attempt < max_attempts - 1:
+                        console.print(f"[yellow]⚠ Script trop long : {word_count} mots (max {max_allowed}), retry ({attempt + 2}/{max_attempts})...[/yellow]")
+                        continue
+                    else:
+                        console.print(f"[yellow]⚠ Script {word_count} mots après {max_attempts} tentatives, on garde[/yellow]")
+
                 # Anti-doublon : vérifier que le hook est différent
                 hook_normalized = script.hook.strip().lower()
                 if hook_normalized in [h.strip().lower() for h in self._generated_hooks]:

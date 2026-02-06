@@ -2,6 +2,7 @@
 Orchestrateur du pipeline de production video.
 """
 
+import random
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -13,6 +14,16 @@ from src.scripts.generator import ScriptGenerator
 
 console = Console()
 
+# Voix naturelles de qualité pour rotation en batch
+BATCH_VOICES = [
+    "fr-FR-Neural2-B",   # Homme naturel 1
+    "fr-FR-Neural2-D",   # Homme naturel 2
+    "fr-FR-Wavenet-B",   # Homme wavenet
+    "fr-FR-Neural2-A",   # Femme naturel 1
+    "fr-FR-Neural2-C",   # Femme naturel 2
+    "fr-FR-Wavenet-A",   # Femme wavenet
+]
+
 
 class ContentOrchestrator:
 
@@ -21,6 +32,7 @@ class ContentOrchestrator:
         self._voice_generator = None
         self._video_pipeline = None
         self._gdrive = None
+        self._used_backgrounds: list[str] = []
 
     @property
     def voice_generator(self):
@@ -54,13 +66,15 @@ class ContentOrchestrator:
             console.print(f"[cyan]🔗 Lien trackable : {script.telegram_link}[/cyan]")
         return script
 
-    def produce_video(self, format, theme=None, background_image=None, upload=False):
+    def produce_video(self, format, theme=None, background_image=None, upload=False, voice_engine="google", voice_name=None):
         script = self.script_generator.generate(format, theme)
         self.script_generator.save_script(script)
         if settings.tracking_enabled:
             console.print(f"[cyan]🔗 Lien trackable : {script.telegram_link}[/cyan]")
-        audio = self.voice_generator.generate_from_script(script)
-        video = self.video_pipeline.process(script, audio, background_image)
+        audio = self.voice_generator.generate_from_script(script, engine=voice_engine, voice_name=voice_name)
+        video = self.video_pipeline.process(script, audio, background_image, used_backgrounds=self._used_backgrounds)
+        if video.video_path:
+            self._used_backgrounds.append(str(video.video_path))
         if upload:
             self.gdrive.upload_video(video)
         return video
@@ -68,12 +82,61 @@ class ContentOrchestrator:
     def produce_batch(self, distribution, theme=None, upload=False):
         total = sum(distribution.values())
         batch = BatchJob(total_count=total)
+
+        # Construire une liste plate de formats puis mélanger l'ordre
+        format_list = []
         for fmt, count in distribution.items():
-            for i in range(count):
-                try:
-                    video = self.produce_video(format=fmt, theme=theme, upload=upload)
-                    batch.videos.append(video)
-                    batch.completed_count += 1
-                except Exception as e:
-                    batch.failed_count += 1
+            format_list.extend([fmt] * count)
+        random.shuffle(format_list)
+
+        # Rotation des voix (garantie différence consécutive)
+        voice_pool = list(BATCH_VOICES)
+        random.shuffle(voice_pool)
+
+        voices_for_batch = []
+        used_in_batch = set()
+
+        for i in range(len(format_list)):
+            if i == 0:
+                # Première vidéo : voix aléatoire du pool
+                voice = voice_pool[0]
+                voices_for_batch.append(voice)
+                used_in_batch.add(voice)
+            else:
+                # Trouver une voix différente de la précédente ET pas déjà utilisée si possible
+                candidates = [v for v in voice_pool if v != voices_for_batch[-1]]
+
+                # Prioriser les voix non utilisées
+                unused = [v for v in candidates if v not in used_in_batch]
+                if unused:
+                    voice = random.choice(unused)
+                else:
+                    voice = random.choice(candidates)
+
+                voices_for_batch.append(voice)
+                used_in_batch.add(voice)
+
+        for video_number, fmt in enumerate(format_list, 1):
+            voice = voices_for_batch[video_number - 1]
+
+            console.print(f"\n[bold]═══ Vidéo {video_number}/{total} [{fmt.value}] voix={voice.split('-')[-1]} ═══[/bold]")
+
+            try:
+                video = self.produce_video(format=fmt, theme=theme, upload=upload, voice_name=voice)
+                batch.videos.append(video)
+                batch.completed_count += 1
+            except Exception as e:
+                batch.failed_count += 1
+                console.print(f"[red]✗ Échec vidéo {video_number}: {e}[/red]")
+
+        # Résumé diversité
+        console.print(f"\n[bold green]{'═' * 50}[/bold green]")
+        console.print(f"[bold green]Batch terminé : {batch.completed_count}/{total} réussies, {batch.failed_count} échecs[/bold green]")
+        hooks = [v.script.hook for v in batch.videos]
+        unique_hooks = set(h.strip().lower() for h in hooks)
+        if len(unique_hooks) < len(hooks):
+            console.print(f"[yellow]⚠ {len(hooks) - len(unique_hooks)} hooks en doublon détectés[/yellow]")
+        else:
+            console.print(f"[green]✓ {len(unique_hooks)} scripts uniques sur {len(hooks)}[/green]")
+
         return batch
