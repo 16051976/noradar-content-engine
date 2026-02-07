@@ -15,6 +15,7 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
+        extra="ignore",
     )
 
     # === Gemini API (Scripts) ===
@@ -28,8 +29,12 @@ class Settings(BaseSettings):
         default="", description="Chemin vers le fichier credentials.json"
     )
     tts_voice_name: str = Field(default="fr-FR-Neural2-D", description="Voix TTS à utiliser")
-    tts_speaking_rate: float = Field(default=1.1, description="Vitesse de parole (0.25-4.0)")
+    tts_speaking_rate: float = Field(default=1.15, description="Vitesse de parole (0.25-4.0)")
     tts_pitch: float = Field(default=0.0, description="Pitch de la voix (-20.0 à 20.0)")
+
+    # === ElevenLabs (Voix alternative) ===
+    elevenlabs_api_key: str = Field(default="", description="Clé API ElevenLabs")
+    elevenlabs_voice_id: str = Field(default="", description="ID de la voix ElevenLabs")
 
     # === Pexels API (Vidéos de fond) ===
     pexels_api_key: str = Field(default="", description="Clé API Pexels (gratuite)")
