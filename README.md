@@ -1,200 +1,137 @@
-# 🎬 NoRadar Content Engine v2.0
+# 🎬 NoRadar Content Engine v2.1
 
-Production automatisée de vidéos marketing pour NoRadar.
+Moteur de production automatisé de vidéos courtes pour TikTok, Instagram Reels, YouTube Shorts.
 
-## 🎯 Objectif
+## ✨ Fonctionnalités
 
-Générer 30 vidéos courtes par semaine pour TikTok, Instagram Reels, YouTube Shorts, Facebook et X, avec un minimum d'effort manuel.
+- **Scripts IA** : Génération automatique via Gemini (5 formats : scandale, tuto, temoignage, mythe, chiffre_choc)
+- **Voix naturelle** : Google Cloud Text-to-Speech (voix Wavenet française)
+- **Vidéos de fond** : Téléchargement automatique depuis Pexels (gratuit, HD)
+- **Sous-titres TikTok** : Style viral avec couleurs alternées, gros texte centré
+- **Format vertical** : 1080x1920 optimisé pour mobile
 
-## 🏗️ Architecture
-
-```
-Script (Gemini) → Voix (Google TTS) → Vidéo (FFmpeg) → Google Drive → Repurpose.io
-                                                                          ↓
-                                                         TikTok, Reels, Shorts, FB, X
-```
-
-## 💰 Coût mensuel estimé
-
-| Service | Coût |
-|---------|------|
-| Gemini Flash | Gratuit (1500 req/jour) |
-| Google Cloud TTS | ~5€ |
-| Repurpose.io | 25€ |
-| **Total** | **~30€/mois** |
-
-## 🚀 Installation
-
-### 1. Cloner et installer
+## 🚀 Installation rapide
 
 ```bash
-git clone https://github.com/your-user/noradar-content-engine.git
+# Cloner et installer
 cd noradar-content-engine
+./setup.sh
+
+# Ou manuellement
+python -m venv venv
+source venv/bin/activate
 pip install -e .
 ```
 
-### 2. Configurer les credentials
+## ⚙️ Configuration
 
+1. **Copier le fichier .env** :
 ```bash
 cp .env.example .env
 ```
 
-Éditez `.env` avec vos clés :
+2. **Configurer les clés API** :
 
-#### Gemini API (gratuit)
-1. Allez sur https://aistudio.google.com/app/apikey
-2. Créez une clé API
-3. Ajoutez-la dans `GEMINI_API_KEY`
+| Variable | Description | Où l'obtenir |
+|----------|-------------|--------------|
+| `GEMINI_API_KEY` | Scripts IA | [Google AI Studio](https://aistudio.google.com/app/apikey) |
+| `GOOGLE_APPLICATION_CREDENTIALS` | Voix TTS | Google Cloud Console → Service Account |
+| `PEXELS_API_KEY` | Vidéos de fond | [Pexels API](https://www.pexels.com/api/) (gratuit) |
 
-#### Google Cloud (TTS + Drive)
-1. Créez un projet sur https://console.cloud.google.com
-2. Activez les APIs :
-   - Cloud Text-to-Speech API
-   - Google Drive API
-3. Créez un Service Account :
-   - IAM & Admin → Service Accounts → Create
-   - Téléchargez le JSON → `credentials/service-account.json`
-4. Pour Google Drive OAuth :
-   - APIs & Services → Credentials → Create OAuth Client ID
-   - Type: Desktop App
-   - Téléchargez le JSON → `credentials/gdrive_credentials.json`
+### Obtenir une clé Pexels (gratuit)
 
-### 3. Installer FFmpeg
+1. Va sur https://www.pexels.com/api/
+2. Clique "Get Started" et crée un compte
+3. Copie ta clé API dans `.env`
+
+## 📺 Utilisation
+
+### Générer une vidéo complète
 
 ```bash
-# Ubuntu/Debian
-sudo apt install ffmpeg
+source venv/bin/activate
+export GOOGLE_APPLICATION_CREDENTIALS=credentials/service-account.json
 
-# macOS
-brew install ffmpeg
+# Une vidéo format "scandale"
+content-engine produce --format scandale --no-upload
 
-# Windows
-choco install ffmpeg
+# Une vidéo format "tuto"
+content-engine produce --format tuto --no-upload
+
+# Seulement le script (sans vidéo)
+content-engine produce --format temoignage --script-only
 ```
 
-### 4. Initialiser
+### Formats disponibles
+
+| Format | Description | Ton |
+|--------|-------------|-----|
+| `scandale` | Indignation, injustice | Énervé, révoltant |
+| `tuto` | Comment contester | Pédagogique, clair |
+| `temoignage` | Success story client | Personnel, authentique |
+| `mythe` | Casser les idées reçues | Surprenant |
+| `chiffre_choc` | Stats choquantes | Impactant |
+
+### Production en batch
 
 ```bash
-content-engine init
+# 5 vidéos (distribution automatique)
+content-engine batch --count 5 --no-upload
+
+# Production hebdomadaire (30 vidéos)
+content-engine weekly --no-upload
 ```
 
-## 📖 Usage
-
-### Commandes principales
-
-```bash
-# Produire une vidéo
-content-engine produce --format scandale
-content-engine produce --format tuto --theme "contester amende stationnement"
-
-# Générer uniquement le script (preview)
-content-engine produce --format scandale --script-only
-
-# Produire un batch
-content-engine batch --count 10
-
-# Produire une semaine complète (30 vidéos)
-content-engine weekly
-
-# Synchroniser vers Google Drive
-content-engine sync
-
-# Voir le statut
-content-engine status
-
-# Lister les voix disponibles
-content-engine voices
-
-# Nettoyer les fichiers
-content-engine clean
-```
-
-### Raccourcis Makefile
-
-```bash
-make video FORMAT=scandale
-make batch COUNT=10
-make weekly
-make sync
-make status
-make clean
-```
-
-## 📁 Formats de contenu
-
-| Format | Objectif | Durée |
-|--------|----------|-------|
-| `scandale` | Viralité, polémique | 20-30s |
-| `tuto` | Conversion, éducation | 30-45s |
-| `temoignage` | Preuve sociale | 20-30s |
-| `mythe` | Démystification | 25-35s |
-| `chiffre_choc` | Hook rapide | 15-20s |
-
-## 📂 Structure des outputs
+## 📁 Structure des outputs
 
 ```
 outputs/
-├── scripts/      # Scripts JSON générés
-├── audio/        # Fichiers MP3 voix off
-├── videos/       # Vidéos finales MP4
-├── ready/        # Prêt pour Repurpose.io (synced avec GDrive)
-└── uploaded/     # Déjà uploadé sur GDrive
+├── scripts/     # Scripts JSON générés
+├── audio/       # Fichiers MP3 (voix)
+├── subtitles/   # Fichiers SRT + ASS
+├── videos/      # Vidéos finales MP4
+└── ready/       # Prêt pour upload
 ```
 
-## 🔄 Workflow Repurpose.io
+## 🎨 Qualité vidéo
 
-1. Les vidéos finies sont copiées dans `outputs/ready/`
-2. `content-engine sync` les upload vers Google Drive
-3. Repurpose.io surveille le dossier Google Drive
-4. Publication automatique vers les 5 plateformes
+- **Résolution** : 1080x1920 (vertical)
+- **FPS** : 30
+- **Codec** : H.264 (libx264)
+- **Audio** : AAC 192kbps
+- **Sous-titres** : Style TikTok (gros, centrés, couleurs)
 
-### Configuration Repurpose.io
+## 🔧 Dépannage
 
-1. Connectez votre Google Drive
-2. Sélectionnez le dossier "NoRadar-Videos"
-3. Configurez les destinations : TikTok, Instagram, YouTube, Facebook, X
-4. Activez l'auto-publishing
-
-## 🎨 Personnalisation
-
-### Changer la voix
-
-Dans `.env` :
-```env
-TTS_VOICE_NAME=fr-FR-Neural2-B  # Voix masculine Neural2
-TTS_SPEAKING_RATE=1.2           # Plus rapide
-```
-
-Voix disponibles :
-- `fr-FR-Wavenet-A/C` : Féminine
-- `fr-FR-Wavenet-B/D` : Masculine
-- `fr-FR-Neural2-A/C` : Féminine (plus naturel)
-- `fr-FR-Neural2-B/D` : Masculine (plus naturel)
-
-### Ajouter un fond personnalisé
-
-```bash
-content-engine produce --format scandale --background assets/backgrounds/dark.png
-```
-
-### Modifier les prompts
-
-Éditez `src/scripts/generator.py` pour ajuster les prompts par format.
-
-## 🐛 Dépannage
-
-### "GEMINI_API_KEY non configurée"
-→ Vérifiez que `.env` existe et contient votre clé
+### "PEXELS_API_KEY non configuré"
+→ Ajoute ta clé Pexels dans `.env` (ou utilise le fond dégradé par défaut)
 
 ### "FFmpeg n'est pas installé"
-→ `sudo apt install ffmpeg` (Linux) ou `brew install ffmpeg` (macOS)
+```bash
+sudo apt install ffmpeg
+```
 
-### "Erreur Google Drive authentication"
-→ Supprimez `credentials/token.pickle` et relancez pour re-authentifier
+### "DefaultCredentialsError"
+```bash
+export GOOGLE_APPLICATION_CREDENTIALS=credentials/service-account.json
+```
 
-### "Quota Whisper dépassé"
-→ Utilisez un modèle plus petit : éditez `SubtitleGenerator(model_size="tiny")`
+## 📊 Coûts estimés
 
-## 📄 License
+| Service | Coût |
+|---------|------|
+| Gemini API | Gratuit (quota généreux) |
+| Google TTS | ~0.016€/vidéo (Wavenet) |
+| Pexels | Gratuit |
+| **Total** | ~0.50€ pour 30 vidéos/semaine |
 
-MIT - NoRadar 2024
+## 🔜 Roadmap
+
+- [ ] Google Drive sync automatique
+- [ ] Repurpose.io integration
+- [ ] Thumbnails automatiques
+- [ ] Analytics tracking
+
+---
+
+**NoRadar** - Contestez vos amendes en 2 minutes 🚗

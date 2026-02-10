@@ -132,6 +132,7 @@ class VoiceGenerator:
         self,
         script: Script,
         voice_name: Optional[str] = None,
+        engine: str = "google",
     ) -> AudioFile:
         """
         Génère l'audio pour un script complet.
@@ -139,6 +140,7 @@ class VoiceGenerator:
         Args:
             script: Script source
             voice_name: Voix optionnelle
+            engine: "google" ou "elevenlabs"
 
         Returns:
             AudioFile avec le chemin et métadonnées
@@ -147,6 +149,24 @@ class VoiceGenerator:
 
         output_path = settings.output_dir / "audio" / f"{script.format.value}_{script.id}.mp3"
 
+        if engine == "elevenlabs":
+            result = self._generate_elevenlabs(script.full_text, output_path)
+            if result is not None:
+                word_count = len(script.full_text.split())
+                duration = (word_count / 150) * 60
+                audio_file = AudioFile(
+                    id=script.id,
+                    script_id=script.id,
+                    path=output_path,
+                    duration=duration,
+                    voice_name=f"elevenlabs:{settings.elevenlabs_voice_id}",
+                )
+                console.print(f"[dim]Durée estimée : {duration:.1f}s[/dim]")
+                return audio_file
+            else:
+                console.print("[yellow]⚠ Fallback sur Google TTS...[/yellow]")
+
+        # Google TTS (défaut ou fallback)
         _, duration = self.generate(
             text=script.full_text,
             output_path=output_path,
@@ -163,6 +183,16 @@ class VoiceGenerator:
 
         console.print(f"[dim]Durée estimée : {duration:.1f}s[/dim]")
         return audio_file
+
+    def _generate_elevenlabs(self, text: str, output_path: Path) -> Optional[Path]:
+        """Tente de générer l'audio via ElevenLabs."""
+        try:
+            from src.voice.elevenlabs import ElevenLabsGenerator
+            generator = ElevenLabsGenerator()
+            return generator.generate(text, output_path)
+        except Exception as e:
+            console.print(f"[red]✗ ElevenLabs import/init échoué: {e}[/red]")
+            return None
 
     def generate_with_ssml(
         self,

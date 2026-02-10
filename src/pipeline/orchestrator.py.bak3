@@ -1,0 +1,118 @@
+"""
+Orchestrateur du pipeline de production video.
+"""
+
+import random
+from datetime import datetime
+from pathlib import Path
+from typing import Optional
+from rich.console import Console
+
+from src.config import settings
+from src.models import BatchJob, Script, Video, VideoFormat, VideoStatus, WeeklyPlan
+from src.scripts.generator import ScriptGenerator
+
+console = Console()
+
+# Voix naturelles de qualité pour rotation en batch
+BATCH_VOICES = [
+    "fr-FR-Neural2-B",   # Homme naturel 1
+    "fr-FR-Neural2-D",   # Homme naturel 2
+    "fr-FR-Wavenet-B",   # Homme wavenet
+    "fr-FR-Neural2-A",   # Femme naturel 1
+    "fr-FR-Neural2-C",   # Femme naturel 2
+    "fr-FR-Wavenet-A",   # Femme wavenet
+]
+
+
+class ContentOrchestrator:
+
+    def __init__(self):
+        self.script_generator = ScriptGenerator()
+        self._voice_generator = None
+        self._video_pipeline = None
+        self._gdrive = None
+        self._used_backgrounds: list[str] = []
+
+    @property
+    def voice_generator(self):
+        if self._voice_generator is None:
+            from src.voice.generator import VoiceGenerator
+            self._voice_generator = VoiceGenerator()
+        return self._voice_generator
+
+    @property
+    def video_pipeline(self):
+        if self._video_pipeline is None:
+            from src.video.composer import VideoPipeline
+            self._video_pipeline = VideoPipeline()
+        return self._video_pipeline
+
+    @property
+    def gdrive(self):
+        if self._gdrive is None:
+            from src.storage.gdrive import GoogleDriveSync
+            self._gdrive = GoogleDriveSync()
+        return self._gdrive
+
+    def script_only(self, format, theme=None):
+        script = self.script_generator.generate(format, theme)
+        self.script_generator.save_script(script)
+        console.print(f"\n[bold]Script genere :[/bold]")
+        console.print(f"[yellow]HOOK:[/yellow] {script.hook}")
+        console.print(f"[yellow]BODY:[/yellow] {script.body[:200]}...")
+        console.print(f"[yellow]CTA:[/yellow] {script.cta}")
+        if settings.tracking_enabled:
+            console.print(f"[cyan]🔗 Lien trackable : {script.telegram_link}[/cyan]")
+        return script
+
+    def produce_video(self, format, theme=None, background_image=None, upload=False, voice_engine="google", voice_name=None):
+        script = self.script_generator.generate(format, theme)
+        self.script_generator.save_script(script)
+        if settings.tracking_enabled:
+            console.print(f"[cyan]🔗 Lien trackable : {script.telegram_link}[/cyan]")
+        audio = self.voice_generator.generate_from_script(script, engine=voice_engine, voice_name=voice_name)
+        video = self.video_pipeline.process(script, audio, background_image, used_backgrounds=self._used_backgrounds)
+        if video.video_path:
+            self._used_backgrounds.append(str(video.video_path))
+        if upload:
+            self.gdrive.upload_video(video)
+        return video
+
+    def produce_batch(self, distribution, theme=None, upload=False):
+        total = sum(distribution.values())
+        batch = BatchJob(total_count=total)
+
+        # Rotation des voix pour variabilité
+        voice_pool = list(BATCH_VOICES)
+        random.shuffle(voice_pool)
+        voice_index = 0
+
+        video_number = 0
+        for fmt, count in distribution.items():
+            for i in range(count):
+                video_number += 1
+                voice = voice_pool[voice_index % len(voice_pool)]
+                voice_index += 1
+
+                console.print(f"\n[bold]═══ Vidéo {video_number}/{total} [{fmt.value}] voix={voice.split('-')[-1]} ═══[/bold]")
+
+                try:
+                    video = self.produce_video(format=fmt, theme=theme, upload=upload, voice_name=voice)
+                    batch.videos.append(video)
+                    batch.completed_count += 1
+                except Exception as e:
+                    batch.failed_count += 1
+                    console.print(f"[red]✗ Échec vidéo {video_number}: {e}[/red]")
+
+        # Résumé diversité
+        console.print(f"\n[bold green]{'═' * 50}[/bold green]")
+        console.print(f"[bold green]Batch terminé : {batch.completed_count}/{total} réussies, {batch.failed_count} échecs[/bold green]")
+        hooks = [v.script.hook for v in batch.videos]
+        unique_hooks = set(h.strip().lower() for h in hooks)
+        if len(unique_hooks) < len(hooks):
+            console.print(f"[yellow]⚠ {len(hooks) - len(unique_hooks)} hooks en doublon détectés[/yellow]")
+        else:
+            console.print(f"[green]✓ {len(unique_hooks)} scripts uniques sur {len(hooks)}[/green]")
+
+        return batch

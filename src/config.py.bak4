@@ -1,0 +1,104 @@
+"""
+Configuration du Content Engine NoRadar.
+Charge les variables d'environnement depuis .env
+"""
+
+from pathlib import Path
+from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import Field
+
+
+class Settings(BaseSettings):
+    """Configuration centralisée du Content Engine."""
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+    )
+
+    # === Gemini API (Scripts) ===
+    gemini_api_key: str = Field(default="", description="Clé API Google Gemini")
+    gemini_model: str = Field(default="gemini-2.0-flash", description="Modèle Gemini à utiliser")
+    gemini_max_tokens: int = Field(default=2000, description="Tokens max pour la génération")
+
+    # === Google Cloud TTS (Voix) ===
+    google_cloud_project: str = Field(default="", description="ID du projet Google Cloud")
+    google_application_credentials: str = Field(
+        default="", description="Chemin vers le fichier credentials.json"
+    )
+    tts_voice_name: str = Field(default="fr-FR-Neural2-D", description="Voix TTS à utiliser")
+    tts_speaking_rate: float = Field(default=1.1, description="Vitesse de parole (0.25-4.0)")
+    tts_pitch: float = Field(default=0.0, description="Pitch de la voix (-20.0 à 20.0)")
+
+    # === Pexels API (Vidéos de fond) ===
+    pexels_api_key: str = Field(default="", description="Clé API Pexels (gratuite)")
+
+    # === Google Drive (Stockage) ===
+    gdrive_folder_id: str = Field(default="", description="ID du dossier Google Drive cible")
+    gdrive_credentials_path: str = Field(
+        default="credentials/gdrive_credentials.json",
+        description="Chemin vers les credentials OAuth Google Drive",
+    )
+
+    # === Paths ===
+    output_dir: Path = Field(default=Path("outputs"), description="Dossier de sortie")
+    assets_dir: Path = Field(default=Path("assets"), description="Dossier des assets")
+    temp_dir: Path = Field(default=Path("temp"), description="Dossier temporaire")
+
+    # === Video Settings ===
+    video_width: int = Field(default=1080, description="Largeur vidéo (format vertical)")
+    video_height: int = Field(default=1920, description="Hauteur vidéo (format vertical)")
+    video_fps: int = Field(default=30, description="FPS de la vidéo")
+    video_format: str = Field(default="mp4", description="Format de sortie vidéo")
+
+    # === Watermark Settings ===
+    watermark_enabled: bool = Field(default=True, description="Activer le watermark")
+    watermark_text: str = Field(default="@NoRadarApp", description="Texte du watermark")
+    watermark_position: str = Field(default="top_right", description="Position: top_left, top_right, bottom_left, bottom_right")
+    watermark_font_size: int = Field(default=36, description="Taille police watermark")
+
+    # === Pexels Cache Settings ===
+    pexels_cache_enabled: bool = Field(default=True, description="Activer le cache local Pexels")
+    pexels_cache_dir: Path = Field(default=Path("cache/pexels"), description="Dossier du cache Pexels")
+    pexels_cache_max_videos: int = Field(default=50, description="Nombre max de vidéos en cache")
+
+    # === Retry Settings ===
+    retry_enabled: bool = Field(default=True, description="Activer le retry automatique")
+    retry_max_attempts: int = Field(default=3, description="Nombre max de tentatives")
+    retry_backoff_seconds: float = Field(default=2.0, description="Délai initial entre tentatives")
+
+    # === Subtitles Settings ===
+    subtitle_font: str = Field(default="Arial Black", description="Police des sous-titres")
+    subtitle_font_size: int = Field(default=80, description="Taille de police (TikTok style)")
+    subtitle_color: str = Field(default="white", description="Couleur du texte")
+    subtitle_outline_color: str = Field(default="black", description="Couleur du contour")
+    subtitle_outline_width: int = Field(default=5, description="Épaisseur du contour")
+    subtitle_position: str = Field(default="center", description="Position (top/center/bottom)")
+
+    # === Production Settings ===
+    batch_size: int = Field(default=5, description="Nombre de vidéos par batch")
+    weekly_target: int = Field(default=30, description="Objectif de vidéos par semaine")
+
+    def ensure_directories(self) -> None:
+        """Crée les dossiers nécessaires s'ils n'existent pas."""
+        for directory in [self.output_dir, self.assets_dir, self.temp_dir]:
+            directory.mkdir(parents=True, exist_ok=True)
+
+        # Sous-dossiers outputs
+        (self.output_dir / "scripts").mkdir(exist_ok=True)
+        (self.output_dir / "audio").mkdir(exist_ok=True)
+        (self.output_dir / "videos").mkdir(exist_ok=True)
+        (self.output_dir / "subtitles").mkdir(exist_ok=True)
+        (self.output_dir / "ready").mkdir(exist_ok=True)
+        
+        # Sous-dossiers temp
+        (self.temp_dir / "video_work").mkdir(exist_ok=True)
+
+        # Cache Pexels
+        if self.pexels_cache_enabled:
+            self.pexels_cache_dir.mkdir(parents=True, exist_ok=True)
+
+
+# Singleton
+settings = Settings()

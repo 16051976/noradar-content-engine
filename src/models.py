@@ -11,14 +11,21 @@ import uuid
 
 
 class VideoFormat(str, Enum):
-    """Les 6 formats de contenu NoRadar."""
+    """Les formats de contenu NoRadar."""
 
+    # Formats existants (feature-driven)
     SCANDALE = "scandale"  # Viral, polémique
     TUTO = "tuto"  # Éducatif, conversion
     TEMOIGNAGE = "temoignage"  # Preuve sociale
     MYTHE = "mythe"  # Démystification
     CHIFFRE_CHOC = "chiffre_choc"  # Hook rapide
     ULTRA_COURT = "ultra_court"  # Format 15 sec, percutant
+
+    # NOUVEAUX FORMATS (story-driven) - PRIORITAIRES
+    STORY_POV = "story_pov"      # "J'ai reçu une amende, voilà ce que j'ai fait"
+    DEBUNK = "debunk"            # "3 raisons de ne PAS payer direct"
+    CAS_REEL = "cas_reel"        # "Amende de 135€ → contestée. Voici comment"
+    VRAI_FAUX = "vrai_faux"      # "VRAI ou FAUX : ..." — engagement interactif
 
 
 class VideoStatus(str, Enum):
@@ -44,6 +51,18 @@ class Script(BaseModel):
     duration_estimate: int = Field(description="Durée estimée en secondes")
     hashtags: list[str] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=datetime.now)
+
+    # Texte de la vignette
+    thumbnail_text: dict = Field(
+        default_factory=lambda: {"line1": "", "line2": ""},
+        description="Texte de la vignette (2 lignes max, majuscules)"
+    )
+
+    # Caption Facebook
+    facebook_caption: str = Field(
+        default="",
+        description="Caption longue pour Facebook (3-5 phrases + CTA)"
+    )
 
     @property
     def filename(self) -> str:
@@ -135,11 +154,15 @@ class WeeklyPlan(BaseModel):
     target_count: int = 30
     distribution: dict[VideoFormat, int] = Field(
         default_factory=lambda: {
-            VideoFormat.SCANDALE: 8,  # ~27%
-            VideoFormat.TUTO: 8,  # ~27%
-            VideoFormat.TEMOIGNAGE: 6,  # ~20%
-            VideoFormat.MYTHE: 4,  # ~13%
-            VideoFormat.CHIFFRE_CHOC: 4,  # ~13%
+            # STORY-DRIVEN (67% du contenu)
+            VideoFormat.STORY_POV: 8,      # ~27% - Format star
+            VideoFormat.DEBUNK: 6,         # ~20%
+            VideoFormat.CAS_REEL: 6,       # ~20%
+            # FEATURE-DRIVEN (33% du contenu)
+            VideoFormat.SCANDALE: 4,       # ~13%
+            VideoFormat.TUTO: 3,           # ~10%
+            VideoFormat.CHIFFRE_CHOC: 3,   # ~10%
+            VideoFormat.VRAI_FAUX: 5,       # ~17%
         }
     )
     batches: list[BatchJob] = Field(default_factory=list)

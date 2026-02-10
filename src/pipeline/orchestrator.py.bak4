@@ -1,0 +1,75 @@
+"""
+Orchestrateur du pipeline de production video.
+"""
+
+from datetime import datetime
+from pathlib import Path
+from typing import Optional
+from rich.console import Console
+
+from src.config import settings
+from src.models import BatchJob, Script, Video, VideoFormat, VideoStatus, WeeklyPlan
+from src.scripts.generator import ScriptGenerator
+
+console = Console()
+
+
+class ContentOrchestrator:
+
+    def __init__(self):
+        self.script_generator = ScriptGenerator()
+        self._voice_generator = None
+        self._video_pipeline = None
+        self._gdrive = None
+
+    @property
+    def voice_generator(self):
+        if self._voice_generator is None:
+            from src.voice.generator import VoiceGenerator
+            self._voice_generator = VoiceGenerator()
+        return self._voice_generator
+
+    @property
+    def video_pipeline(self):
+        if self._video_pipeline is None:
+            from src.video.composer import VideoPipeline
+            self._video_pipeline = VideoPipeline()
+        return self._video_pipeline
+
+    @property
+    def gdrive(self):
+        if self._gdrive is None:
+            from src.storage.gdrive import GoogleDriveSync
+            self._gdrive = GoogleDriveSync()
+        return self._gdrive
+
+    def script_only(self, format, theme=None):
+        script = self.script_generator.generate(format, theme)
+        self.script_generator.save_script(script)
+        console.print(f"\n[bold]Script genere :[/bold]")
+        console.print(f"[yellow]HOOK:[/yellow] {script.hook}")
+        console.print(f"[yellow]BODY:[/yellow] {script.body[:200]}...")
+        console.print(f"[yellow]CTA:[/yellow] {script.cta}")
+        return script
+
+    def produce_video(self, format, theme=None, background_image=None, upload=False):
+        script = self.script_generator.generate(format, theme)
+        self.script_generator.save_script(script)
+        audio = self.voice_generator.generate_from_script(script)
+        video = self.video_pipeline.process(script, audio, background_image)
+        if upload:
+            self.gdrive.upload_video(video)
+        return video
+
+    def produce_batch(self, distribution, theme=None, upload=False):
+        total = sum(distribution.values())
+        batch = BatchJob(total_count=total)
+        for fmt, count in distribution.items():
+            for i in range(count):
+                try:
+                    video = self.produce_video(format=fmt, theme=theme, upload=upload)
+                    batch.videos.append(video)
+                    batch.completed_count += 1
+                except Exception as e:
+                    batch.failed_count += 1
+        return batch

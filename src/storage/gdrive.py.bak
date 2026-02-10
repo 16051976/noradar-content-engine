@@ -1,0 +1,265 @@
+"""
+Synchronisation avec Google Drive pour Repurpose.io.
+"""
+
+import io
+import pickle
+from pathlib import Path
+from typing import Optional
+from google.oauth2.credentials import Credentials
+from google_auth_oauthlib.flow import InstalledAppFlow
+from google.auth.transport.requests import Request
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload
+from rich.console import Console
+
+from src.config import settings
+from src.models import Video, VideoStatus
+
+console = Console()
+
+# Scopes nécessaires pour Google Drive
+SCOPES = ["https://www.googleapis.com/auth/drive.file"]
+
+
+class GoogleDriveSync:
+    """Gère la synchronisation avec Google Drive."""
+
+    def __init__(self):
+        self.creds = self._get_credentials()
+        self.service = build("drive", "v3", credentials=self.creds)
+        self.folder_id = settings.gdrive_folder_id
+
+    def _get_credentials(self) -> Credentials:
+        """Obtient ou rafraîchit les credentials OAuth."""
+        creds = None
+        token_path = Path("credentials/token.pickle")
+        credentials_path = Path(settings.gdrive_credentials_path)
+
+        # Charger le token existant
+        if token_path.exists():
+            with open(token_path, "rb") as token:
+                creds = pickle.load(token)
+
+        # Rafraîchir ou créer les credentials
+        if not creds or not creds.valid:
+            if creds and creds.expired and creds.refresh_token:
+                creds.refresh(Request())
+            else:
+                if not credentials_path.exists():
+                    raise FileNotFoundError(
+                        f"Fichier credentials non trouvé : {credentials_path}\n"
+                        "1. Va sur https://console.cloud.google.com/apis/credentials\n"
+                        "2. Crée un OAuth 2.0 Client ID (Desktop app)\n"
+                        "3. Télécharge le JSON et place-le dans credentials/gdrive_credentials.json"
+                    )
+
+                flow = InstalledAppFlow.from_client_secrets_file(
+                    str(credentials_path),
+                    SCOPES,
+                )
+                creds = flow.run_local_server(port=0)
+
+            # Sauvegarder le token
+            token_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(token_path, "wb") as token:
+                pickle.dump(creds, token)
+
+        return creds
+
+    def ensure_folder(self, folder_name: str = "NoRadar-Videos") -> str:
+        """
+        Crée ou trouve le dossier de destination.
+
+        Returns:
+            ID du dossier
+        """
+        if self.folder_id:
+            return self.folder_id
+
+        # Chercher si le dossier existe
+        query = f"name='{folder_name}' and mimeType='application/vnd.google-apps.folder' and trashed=false"
+        results = self.service.files().list(q=query, fields="files(id, name)").execute()
+        folders = results.get("files", [])
+
+        if folders:
+            folder_id = folders[0]["id"]
+            console.print(f"[dim]Dossier existant trouvé : {folder_name}[/dim]")
+        else:
+            # Créer le dossier
+            file_metadata = {
+                "name": folder_name,
+                "mimeType": "application/vnd.google-apps.folder",
+            }
+            folder = self.service.files().create(body=file_metadata, fields="id").execute()
+            folder_id = folder.get("id")
+            console.print(f"[green]Dossier créé : {folder_name}[/green]")
+
+        self.folder_id = folder_id
+        return folder_id
+
+    def upload_video(
+        self,
+        video: Video,
+        folder_name: str = "NoRadar-Videos",
+    ) -> str:
+        """
+        Upload une vidéo vers Google Drive.
+
+        Args:
+            video: Video à uploader
+            folder_name: Nom du dossier de destination
+
+        Returns:
+            URL de la vidéo sur Google Drive
+        """
+        if not video.video_path or not video.video_path.exists():
+            raise FileNotFoundError(f"Fichier vidéo non trouvé : {video.video_path}")
+
+        folder_id = self.ensure_folder(folder_name)
+
+        console.print(f"[blue]Upload vers Google Drive : {video.filename}...[/blue]")
+
+        file_metadata = {
+            "name": video.filename,
+            "parents": [folder_id],
+        }
+
+        media = MediaFileUpload(
+            str(video.video_path),
+            mimetype="video/mp4",
+            resumable=True,
+        )
+
+        file = (
+            self.service.files()
+            .create(
+                body=file_metadata,
+                media_body=media,
+                fields="id, webViewLink",
+            )
+            .execute()
+        )
+
+        video.gdrive_url = file.get("webViewLink")
+        video.status = VideoStatus.UPLOADED
+
+        console.print(f"[green]✓ Uploadé : {video.gdrive_url}[/green]")
+        return video.gdrive_url
+
+    def upload_batch(
+        self,
+        videos: list[Video],
+        folder_name: str = "NoRadar-Videos",
+    ) -> list[str]:
+        """
+        Upload un batch de vidéos.
+
+        Args:
+            videos: Liste de vidéos à uploader
+            folder_name: Nom du dossier
+
+        Returns:
+            Liste des URLs
+        """
+        urls = []
+        for i, video in enumerate(videos):
+            try:
+                console.print(f"\n[bold][{i + 1}/{len(videos)}] {video.filename}[/bold]")
+                url = self.upload_video(video, folder_name)
+                urls.append(url)
+            except Exception as e:
+                console.print(f"[red]Échec upload {video.filename} : {e}[/red]")
+                urls.append(None)
+
+        successful = len([u for u in urls if u])
+        console.print(f"\n[green]Upload terminé : {successful}/{len(videos)} vidéos[/green]")
+        return urls
+
+    def list_videos(self, folder_name: str = "NoRadar-Videos") -> list[dict]:
+        """Liste les vidéos dans le dossier."""
+        folder_id = self.ensure_folder(folder_name)
+
+        query = f"'{folder_id}' in parents and mimeType='video/mp4' and trashed=false"
+        results = (
+            self.service.files()
+            .list(
+                q=query,
+                fields="files(id, name, webViewLink, createdTime, size)",
+                orderBy="createdTime desc",
+            )
+            .execute()
+        )
+
+        return results.get("files", [])
+
+    def delete_video(self, file_id: str) -> bool:
+        """Supprime une vidéo (met à la corbeille)."""
+        try:
+            self.service.files().update(fileId=file_id, body={"trashed": True}).execute()
+            return True
+        except Exception as e:
+            console.print(f"[red]Erreur suppression : {e}[/red]")
+            return False
+
+    def get_shareable_link(self, file_id: str) -> str:
+        """Rend un fichier partageable et retourne le lien."""
+        # Rendre le fichier accessible à tous avec le lien
+        permission = {"type": "anyone", "role": "reader"}
+        self.service.permissions().create(fileId=file_id, body=permission).execute()
+
+        # Récupérer le lien
+        file = self.service.files().get(fileId=file_id, fields="webViewLink").execute()
+        return file.get("webViewLink")
+
+
+def sync_ready_videos(folder_name: str = "NoRadar-Videos") -> list[str]:
+    """
+    Synchronise toutes les vidéos prêtes vers Google Drive.
+
+    Cherche dans outputs/ready/ et upload tout ce qui s'y trouve.
+    """
+    ready_dir = settings.output_dir / "ready"
+    if not ready_dir.exists():
+        console.print("[yellow]Aucune vidéo à synchroniser dans outputs/ready/[/yellow]")
+        return []
+
+    video_files = list(ready_dir.glob("*.mp4"))
+    if not video_files:
+        console.print("[yellow]Aucune vidéo MP4 trouvée dans outputs/ready/[/yellow]")
+        return []
+
+    console.print(f"[bold]Synchronisation de {len(video_files)} vidéos...[/bold]")
+
+    gdrive = GoogleDriveSync()
+    folder_id = gdrive.ensure_folder(folder_name)
+
+    urls = []
+    for video_path in video_files:
+        try:
+            file_metadata = {
+                "name": video_path.name,
+                "parents": [folder_id],
+            }
+
+            media = MediaFileUpload(str(video_path), mimetype="video/mp4", resumable=True)
+
+            file = (
+                gdrive.service.files()
+                .create(body=file_metadata, media_body=media, fields="id, webViewLink")
+                .execute()
+            )
+
+            url = file.get("webViewLink")
+            urls.append(url)
+            console.print(f"[green]✓ {video_path.name}[/green]")
+
+            # Déplacer vers un dossier "uploaded" pour éviter les doublons
+            uploaded_dir = settings.output_dir / "uploaded"
+            uploaded_dir.mkdir(exist_ok=True)
+            video_path.rename(uploaded_dir / video_path.name)
+
+        except Exception as e:
+            console.print(f"[red]✗ {video_path.name} : {e}[/red]")
+
+    return urls
