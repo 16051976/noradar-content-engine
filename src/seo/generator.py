@@ -45,9 +45,11 @@ RÈGLES :
 - Structuré avec des <h2> et <h3> (PAS de <h1>, il est déjà dans le template)
 - Paragraphes courts (3-4 lignes max)
 - Listes à puces quand pertinent
-- Ton : professionnel mais accessible, tutoiement
+- Ton : professionnel, expert, autoritaire. Vouvoiement obligatoire (JAMAIS de tu/toi/ton)
 - Juridiquement correct mais vulgarisé (pas de jargon)
 - NE PAS inventer de statistiques ou de jurisprudences précises
+- Citer les articles de loi (L.121-3, 529-2 CPP, 529-10) comme preuves de complexité, SANS expliquer comment les exploiter
+- Chaque section doit subtilement rappeler que seul un service spécialisé peut naviguer cette complexité
 
 SECTIONS OBLIGATOIRES (dans cet ordre) :
 1. Introduction (2-3 paragraphes, poser le contexte, rassurer)
@@ -96,9 +98,11 @@ RÈGLES :
 - 800-1200 mots
 - Structuré avec des <h2> et <h3>
 - Répondre DIRECTEMENT à la question dès l'introduction
-- Ton : professionnel mais accessible, tutoiement
+- Ton : professionnel, expert, autoritaire. Vouvoiement obligatoire (JAMAIS de tu/toi/ton)
 - Juridiquement correct mais vulgarisé
 - NE PAS inventer de statistiques ou de jurisprudences précises
+- Citer les articles de loi (L.121-3, 529-2 CPP, 529-10) comme preuves de complexité, SANS expliquer comment les exploiter
+- Chaque section doit subtilement rappeler que seul un service spécialisé peut naviguer cette complexité
 
 SECTIONS OBLIGATOIRES :
 1. Introduction (réponse directe en 2-3 phrases + développement)
@@ -344,6 +348,15 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         }}
         .breadcrumb a {{ color: #6b7280; }}
     </style>
+
+    <!-- Google Analytics -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-VLMMR6TVN2"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){{dataLayer.push(arguments);}}
+      gtag('js', new Date());
+      gtag('config', 'G-VLMMR6TVN2');
+    </script>
 </head>
 <body>
     <header class="site-header">
@@ -388,7 +401,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             <a href="https://noradar.app/contester-amende-radar">Guide contestation</a>
             <a href="https://t.me/noradar_bot">Telegram</a>
         </div>
-        <p>&copy; 2025 NoRadar &mdash; Con&ccedil;u par des avocats. Ex&eacute;cut&eacute; par une IA.</p>
+        <p>&copy; 2026 NoRadar &mdash; Con&ccedil;u par des avocats. Ex&eacute;cut&eacute; par une IA.</p>
     </footer>
 
     <div class="sticky-cta">
