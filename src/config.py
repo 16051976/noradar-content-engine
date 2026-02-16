@@ -100,7 +100,8 @@ class Settings(BaseSettings):
         (self.output_dir / "videos").mkdir(exist_ok=True)
         (self.output_dir / "subtitles").mkdir(exist_ok=True)
         (self.output_dir / "ready").mkdir(exist_ok=True)
-        
+        (self.output_dir / "carousels").mkdir(exist_ok=True)
+
         # Sous-dossiers temp
         (self.temp_dir / "video_work").mkdir(exist_ok=True)
 

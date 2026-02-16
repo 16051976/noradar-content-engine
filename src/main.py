@@ -264,5 +264,46 @@ def seo(
         builder.build_all(output_dir)
 
 
+@app.command()
+def carousel(
+    format: str = typer.Option(..., "--format", "-f", help="Format: mythe_vs_fait, checklist, chiffre_choc, avant_apres, process, do_dont, faq, story_cas"),
+    theme: Optional[str] = typer.Option(None, "--theme", "-t", help="Thème spécifique"),
+    platform: Optional[str] = typer.Option(None, "--platform", "-p", help="Plateforme: instagram, tiktok, x (défaut: toutes)"),
+    count: int = typer.Option(1, "--count", "-c", help="Nombre de carrousels à produire"),
+    no_upload: bool = typer.Option(False, "--no-upload", help="Ne pas uploader sur Google Drive"),
+):
+    """Produit un ou plusieurs carrousels (slides PNG multi-plateforme)."""
+    from src.models import CarouselFormat, Platform
+    from src.pipeline.orchestrator import ContentOrchestrator
+
+    try:
+        carousel_format = CarouselFormat(format.lower())
+    except ValueError:
+        console.print(f"[red]Format invalide : {format}[/red]")
+        console.print(f"Formats disponibles : {', '.join(f.value for f in CarouselFormat)}")
+        raise typer.Exit(1)
+
+    platforms = None
+    if platform:
+        try:
+            platforms = [Platform(platform.lower())]
+        except ValueError:
+            console.print(f"[red]Plateforme invalide : {platform}[/red]")
+            console.print(f"Plateformes disponibles : {', '.join(p.value for p in Platform)}")
+            raise typer.Exit(1)
+
+    orchestrator = ContentOrchestrator()
+
+    if count == 1:
+        orchestrator.produce_carousel(
+            format=carousel_format, theme=theme, platforms=platforms, upload=not no_upload
+        )
+    else:
+        distribution = {carousel_format: count}
+        orchestrator.produce_carousel_batch(
+            distribution, theme=theme, platforms=platforms, upload=not no_upload
+        )
+
+
 if __name__ == "__main__":
     app()

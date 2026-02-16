@@ -140,3 +140,105 @@ class ContentOrchestrator:
             console.print(f"[green]✓ {len(unique_hooks)} scripts uniques sur {len(hooks)}[/green]")
 
         return batch
+
+    def produce_weekly(self, upload=False):
+        """
+        Produit une semaine complète de contenu (30 vidéos).
+        Distribution optimale des formats.
+        """
+        console.print("[bold cyan]═══════════════════════════════════════[/bold cyan]")
+        console.print("[bold cyan]   PRODUCTION WEEKLY - 30 VIDÉOS      [/bold cyan]")
+        console.print("[bold cyan]═══════════════════════════════════════[/bold cyan]\n")
+        
+        # Distribution hebdomadaire (basée sur settings.weekly_target)
+        total = settings.weekly_target
+        
+        distribution = {
+            VideoFormat.STORY_POV: int(total * 0.27),    # 27% = 8 vidéos
+            VideoFormat.DEBUNK: int(total * 0.20),        # 20% = 6 vidéos
+            VideoFormat.CAS_REEL: int(total * 0.20),      # 20% = 6 vidéos
+            VideoFormat.SCANDALE: int(total * 0.13),      # 13% = 4 vidéos
+            VideoFormat.TUTO: int(total * 0.10),          # 10% = 3 vidéos
+            VideoFormat.TEMOIGNAGE: int(total * 0.05),    # 5% = 2 vidéos
+            VideoFormat.MYTHE: int(total * 0.05),         # 5% = 1 vidéo
+        }
+        
+        # Ajuster pour atteindre exactement le total
+        current_sum = sum(distribution.values())
+        if current_sum < total:
+            # Ajouter les vidéos manquantes au format le plus performant
+            distribution[VideoFormat.STORY_POV] += (total - current_sum)
+        
+        console.print("[bold]Distribution hebdomadaire :[/bold]")
+        for fmt, count in distribution.items():
+            console.print(f"  {fmt.value}: {count}")
+        console.print(f"\n[bold]Total : {sum(distribution.values())} vidéos[/bold]\n")
+        
+        return self.produce_batch(distribution, upload=upload)
+
+    # ══════════════════════════════════════════════════════
+    # CARROUSELS
+    # ══════════════════════════════════════════════════════
+
+    def produce_carousel(self, format, theme=None, platforms=None, upload=False):
+        """Produit un carrousel : génération contenu + rendu PNG multi-plateforme."""
+        from src.carousel.generator import CarouselGenerator
+        from src.carousel.renderer import render_carousel
+        from src.models import Platform
+
+        generator = CarouselGenerator()
+        carousel = generator.generate(format, theme)
+        generator.save_carousel(carousel)
+
+        # Rendu PNG par plateforme
+        carousel_dir = settings.output_dir / "carousels" / f"{carousel.format.value}_{carousel.id}"
+        paths = render_carousel(carousel, carousel_dir, platforms)
+        carousel.output_paths = {k: [str(p) for p in v] for k, v in paths.items()}
+
+        console.print(f"\n[bold green]Carrousel produit : {carousel.title}[/bold green]")
+        for plat, imgs in paths.items():
+            console.print(f"  [green]✓[/green] {plat} : {len(imgs)} slides")
+
+        if upload:
+            self._upload_carousel(carousel)
+
+        return carousel
+
+    def _upload_carousel(self, carousel):
+        """Upload les PNG d'un carrousel vers Google Drive."""
+        for platform, img_paths in carousel.output_paths.items():
+            for img_path in img_paths:
+                path = Path(img_path)
+                if path.exists():
+                    try:
+                        self.gdrive.upload_file(path)
+                    except Exception as e:
+                        console.print(f"[red]Upload échoué ({path.name}): {e}[/red]")
+
+    def produce_carousel_batch(self, distribution, theme=None, platforms=None, upload=False):
+        """Produit un batch de carrousels selon une distribution de formats."""
+        from src.models import CarouselFormat
+
+        total = sum(distribution.values())
+        console.print(f"\n[bold cyan]═══ Batch carrousels : {total} à produire ═══[/bold cyan]")
+
+        carousels = []
+        completed = 0
+        failed = 0
+
+        for fmt, count in distribution.items():
+            for i in range(count):
+                console.print(f"\n[bold]═══ Carrousel {completed + failed + 1}/{total} [{fmt.value}] ═══[/bold]")
+                try:
+                    carousel = self.produce_carousel(
+                        format=fmt, theme=theme, platforms=platforms, upload=upload
+                    )
+                    carousels.append(carousel)
+                    completed += 1
+                except Exception as e:
+                    failed += 1
+                    console.print(f"[red]✗ Échec carrousel : {e}[/red]")
+
+        console.print(f"\n[bold green]{'═' * 50}[/bold green]")
+        console.print(f"[bold green]Batch terminé : {completed}/{total} réussis, {failed} échecs[/bold green]")
+        return carousels

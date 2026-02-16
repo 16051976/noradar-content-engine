@@ -167,3 +167,49 @@ class WeeklyPlan(BaseModel):
     )
     batches: list[BatchJob] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=datetime.now)
+
+
+# ══════════════════════════════════════════════════════
+# CARROUSELS
+# ══════════════════════════════════════════════════════
+
+class Platform(str, Enum):
+    """Plateformes cibles pour les carrousels."""
+    INSTAGRAM = "instagram"
+    TIKTOK = "tiktok"
+    X = "x"
+
+
+class CarouselFormat(str, Enum):
+    """Formats de carrousel disponibles."""
+    MYTHE_VS_FAIT = "mythe_vs_fait"
+    CHECKLIST = "checklist"
+    CHIFFRE_CHOC = "chiffre_choc"
+    AVANT_APRES = "avant_apres"
+    PROCESS = "process"
+    DO_DONT = "do_dont"
+    FAQ = "faq"
+    STORY_CAS = "story_cas"
+
+
+class CarouselSlide(BaseModel):
+    """Une slide de carrousel."""
+    icon: str = ""
+    title: str = ""
+    body: str = ""
+    label: Optional[str] = None
+    label_color: Optional[str] = None
+
+
+class Carousel(BaseModel):
+    """Carrousel complet (contenu généré)."""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4())[:8])
+    format: CarouselFormat
+    title: str
+    slides: list[CarouselSlide] = Field(default_factory=list)
+    hashtags: list[str] = Field(default_factory=list)
+    caption_instagram: str = ""
+    caption_tiktok: str = ""
+    caption_x: str = ""
+    output_paths: dict[str, list] = Field(default_factory=dict)
+    created_at: datetime = Field(default_factory=datetime.now)
