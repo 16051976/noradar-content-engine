@@ -7,17 +7,11 @@ import json
 import random
 from typing import Optional
 
-import google.generativeai as genai
-from google.api_core.exceptions import (
-    DeadlineExceeded,
-    ResourceExhausted,
-    ServiceUnavailable,
-)
+import anthropic
 from rich.console import Console
 
 from src.config import settings
 from src.models import Carousel, CarouselFormat, CarouselSlide
-from src.utils.retry import with_retry
 
 console = Console()
 
@@ -172,28 +166,23 @@ CHIFFRES UTILISABLES :
 
 TON : Impact, surprise. Chaque chiffre doit faire réagir.""",
 
-    CarouselFormat.AVANT_APRES: """FORMAT : AVANT / APRÈS
-Objectif : Contraste entre "sans noradar" et "avec noradar".
+    CarouselFormat.AVANT_APRES: """FORMAT : SANS / AVEC NORADAR
 
-STRUCTURE (6 slides) :
-- Slide 1 (HOOK) : "Avant vs Après noradar" ou similaire
-- Slides 2-3 (AVANT) : Situations galères sans noradar
-  → label = "AVANT", label_color = "red"
-  → title = la situation galère
-  → body = détails
-  → icon = emoji négatif
-- Slides 4-5 (APRÈS) : Mêmes situations avec noradar
-  → label = "APRÈS", label_color = "green"
-  → title = la situation résolue
-  → body = détails
-  → icon = emoji positif
-- Slide 6 (CTA) : "Passe de l'autre côté" + noradar.app
+Tu dois générer UNIQUEMENT un titre accrocheur pour ce carousel (champ "title" du carousel).
+Exemples OBLIGATOIRES à imiter — max 6 mots, brutal, chiffre dedans :
+"135€. Ou 34€. Choisis."
+"Ton PV radar coûte 4x trop cher."
+"J'ai contesté. J'ai gagné. 34€."
+"Payer 135€ ou pas. C'est ton choix."
+Le titre DOIT être court, direct, choquant. PAS de phrase longue. PAS de "Voici", "Découvre", "Je vais te montrer".
 
-PAIRES AVANT/APRÈS :
-- Avant: payer 135€ sans réfléchir → Après: contester en 60s pour 34€
-- Avant: perdre 3 points → Après: garder tous tes points
-- Avant: stresser pendant des semaines → Après: dossier réglé en 60s
-- Avant: chercher un avocat → Après: IA juridique sur Telegram""",
+Génère UN objet JSON avec UNIQUEMENT ces champs :
+{
+  "title": "...",
+  "slides": []
+}
+
+Ne génère PAS de slides. Juste le title.""",
 
     CarouselFormat.PROCESS: """FORMAT : PROCESS / ÉTAPES
 Objectif : Expliquer le parcours noradar étape par étape.
@@ -284,6 +273,49 @@ SCÉNARIOS :
 - Téléphone au volant, jeune conducteur, risque permis, noradar sauve la mise
 
 TON : Narratif, suspense progressif. Le lecteur s'identifie.""",
+
+    CarouselFormat.COUNTDOWN: """FORMAT : COUNTDOWN / TOP N
+Objectif : Lister N erreurs ou faits choc qui créent de l'urgence.
+
+STRUCTURE (7 slides) :
+- Slide 1 (HOOK) : Titre accrocheur + body vide ""
+  Ex: "5 erreurs qui te font payer pour rien"
+  Ex: "Les 4 réflexes que 9 conducteurs sur 10 n'ont pas"
+  → icon = "🔥" ou "⚠️"
+- Slides 2-6 (CONTENU) : Chaque slide = une erreur numérotée
+  → title = l'erreur concrète (ex: "Payer sans réfléchir")
+  → body = la conséquence exacte en € ou en points (MAX 12 MOTS)
+  → label = "ERREUR 1", "ERREUR 2", etc.
+  → label_color = "red"
+  → icon = emoji pertinent
+- Slide 7 (CTA) : "Tu viens de faire une de ces erreurs ?"
+
+TON : Provocateur, comme un ami qui te secoue.""",
+
+    CarouselFormat.SCREENSHOT_TELEGRAM: """Tu génères exactement 4 slides pour un carousel NoRadar format "Screenshot Telegram".
+
+RÈGLE ABSOLUE : exactement 4 slides, pas une de plus.
+RÈGLE label_color : slide 1 = null, slide 2 = 'orange', slide 3 = 'green', slide 4 = null. Ces valeurs sont OBLIGATOIRES et ne peuvent pas être modifiées.
+
+Slide 1 - label_color: null
+  title: message émotionnel et court de l'user, style texto stressé, avec emoji (ex: "J'ai reçu un PV de 135€ ce matin... j'ai vraiment pas les moyens 😓 C'est contestable ?", "Encore un radar ! 135€ + 3 points, à ce rythme je perds mon permis 😤", "J'ai 45 jours pour contester mais je sais pas du tout comment faire...")
+  body: réponse immédiate du bot (ex: "🚗 Amende radar ? Envoyez-moi une photo de votre PV, je m'occupe de tout.")
+
+Slide 2 - label_color: "orange"
+  title: (vide ou ignoré)
+  body: (vide ou ignoré) — la slide affiche toujours le message "Dossier éligible / Garantie / 34€ / bouton Payer"
+
+Slide 3 - label_color: "green"
+  title: description du résultat (ex: "Résultat : amende annulée")
+  body: détails (ex: "135€ récupérés · Points intacts · 0€ supplémentaire")
+
+Slide 4 - CTA (générée automatiquement par le renderer)
+  title: accroche (ex: "Même amende ? Fais pareil.")
+  body: sous-titre (ex: "34€ · Remboursé si ça rate · Lien en bio → noradar.app")
+
+Génère des variations réalistes selon le type d'infraction : excès vitesse, feu rouge, téléphone, stationnement, ceinture.
+Formate la réponse en JSON avec une liste "slides" de 4 éléments.
+""",
 }
 
 
@@ -349,7 +381,42 @@ CAROUSEL_ANGLE_VARIATIONS = {
         "Cas : ceinture non attachée sur un parking",
         "Cas : conducteur qui cumule les amendes et découvre noradar",
     ],
+    CarouselFormat.COUNTDOWN: [
+        "Angle : erreurs à la réception d'une amende",
+        "Angle : erreurs qui font perdre des points inutilement",
+        "Angle : erreurs financières face à une amende",
+        "Angle : réflexes que les bons conducteurs ont",
+        "Angle : top 5 des erreurs du conducteur lambda",
+    ],
+    CarouselFormat.SCREENSHOT_TELEGRAM: [
+        "Angle : excès de vitesse radar (ex: 135€, perte de points)",
+        "Angle : feu rouge grillé (ex: 135€ forfaitaire)",
+        "Angle : téléphone au volant (ex: 135€ + 3 points)",
+        "Angle : stop non respecté (ex: 135€ + 4 points)",
+        "Angle : vitesse en agglomération (ex: 68€, perte de point)",
+    ],
 }
+
+
+# ══════════════════════════════════════════════════════
+# POOL AVANT/APRÈS (données hardcodées)
+# ══════════════════════════════════════════════════════
+
+AVANT_APRES_TITLES = [
+    "Tu as payé trop vite.",
+    "135€ partis. Sans réfléchir.",
+    "Pourquoi tu as payé ?",
+    "Tu pouvais au moins tenter.",
+    "Réflexe : 135€. Décision : 34€.",
+]
+
+AVANT_APRES_POOL = [
+    ("-135€", "payé direct", "-34€", "au moins tenté"),
+    ("-3 points", "acceptés trop vite", "0 point", "contestation possible"),
+    ("payer direct", "réflexe automatique", "contester", "réflexe malin"),
+    ("135€ débités", "aucune tentative", "34€ investis", "tenté au moins"),
+    ("tout le monde paie", "sans réfléchir", "certains contestent", "et gagnent"),
+]
 
 
 # ══════════════════════════════════════════════════════
@@ -360,17 +427,20 @@ class CarouselGenerator:
     """Génère le contenu des carrousels via Gemini API."""
 
     def __init__(self):
-        if not settings.gemini_api_key:
-            raise ValueError("GEMINI_API_KEY non configurée dans .env")
-
-        genai.configure(api_key=settings.gemini_api_key)
-        self.model = genai.GenerativeModel(settings.gemini_model)
+        if not settings.anthropic_api_key:
+            raise ValueError("ANTHROPIC_API_KEY non configurée dans .env")
+        self.client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
         self._generated_hooks: list[str] = []
 
-    @with_retry(exceptions=(ResourceExhausted, ServiceUnavailable, DeadlineExceeded))
-    def _call_gemini(self, prompts, generation_config):
-        """Appel API Gemini avec retry automatique."""
-        return self.model.generate_content(prompts, generation_config=generation_config)
+    def _call_claude_api(self, system: str, user: str) -> str:
+        message = self.client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=2000,
+            temperature=1.0,
+            system=system,
+            messages=[{"role": "user", "content": user}],
+        )
+        return message.content[0].text
 
     def generate(
         self,
@@ -430,16 +500,7 @@ class CarouselGenerator:
             )
 
             try:
-                response = self._call_gemini(
-                    [CAROUSEL_SYSTEM_PROMPT, user_prompt],
-                    generation_config=genai.GenerationConfig(
-                        max_output_tokens=2000,
-                        temperature=0.9,
-                    ),
-                )
-
-                # Extraction JSON
-                response_text = response.text.strip()
+                response_text = self._call_claude_api(CAROUSEL_SYSTEM_PROMPT, user_prompt).strip()
                 if response_text.startswith("```"):
                     response_text = response_text.split("```")[1]
                     if response_text.startswith("json"):
@@ -448,9 +509,21 @@ class CarouselGenerator:
 
                 data = json.loads(response_text)
 
+                # Correction body AVANT_APRES si nécessaire
+                raw_slides = data["slides"]
+                if format == CarouselFormat.AVANT_APRES:
+                    pool_filtered = [p for p in AVANT_APRES_POOL if p[0] != "-135€"]
+                    pairs = random.sample(pool_filtered, 3)
+                    carousel_title = random.choice(AVANT_APRES_TITLES)
+                    raw_slides = [
+                        {"icon": "", "title": carousel_title, "body": ""},
+                        *[{"icon": "", "title": "", "body": f"{p[0]}|||{p[1]}|||{p[2]}|||{p[3]}"} for p in pairs],
+                        {"icon": "", "title": "Prêt à garder tes points ?", "body": ""},
+                    ]
+
                 # Construction des slides
                 slides = []
-                for s in data["slides"]:
+                for s in raw_slides:
                     slide = CarouselSlide(
                         icon=s.get("icon") or "",
                         title=s["title"],

@@ -635,7 +635,8 @@ class VideoComposerPro:
                 bg = self._image_to_video(background_image, duration)
         else:
             bg = self.get_background_video(script.format.value, duration, used_backgrounds=used_backgrounds)
-        
+
+        self.last_used_bg = bg
         prepared = self.prepare_background(bg, duration)
         
         # ASS subtitles
@@ -749,7 +750,7 @@ class VideoPipeline:
 
         video = Video(
             id=script.id, script=script, audio=audio, subtitles=subtitles,
-            video_path=video_path, status=VideoStatus.VIDEO_READY,
+            video_path=video_path, background_path=Path(self.video_composer.last_used_bg) if hasattr(self.video_composer, 'last_used_bg') else None, status=VideoStatus.VIDEO_READY,
         )
         console.print(f"[bold green]✓ Vidéo complète: {video.filename}[/bold green]")
         return video

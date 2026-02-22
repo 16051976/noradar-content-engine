@@ -45,6 +45,7 @@ class Script(BaseModel):
     format: VideoFormat
     title: str
     hook: str = Field(description="Accroche des 3 premières secondes")
+    hook_emotion: Optional[str] = None
     body: str = Field(description="Corps du script")
     cta: str = Field(description="Call-to-action final")
     full_text: str = Field(description="Texte complet pour le TTS")
@@ -119,6 +120,7 @@ class Video(BaseModel):
     audio: Optional[AudioFile] = None
     subtitles: Optional[Subtitles] = None
     video_path: Optional[Path] = None
+    background_path: Optional[Path] = None
     thumbnail_path: Optional[Path] = None
     status: VideoStatus = VideoStatus.DRAFT
     gdrive_url: Optional[str] = None
@@ -190,6 +192,8 @@ class CarouselFormat(str, Enum):
     DO_DONT = "do_dont"
     FAQ = "faq"
     STORY_CAS = "story_cas"
+    COUNTDOWN = "countdown"
+    SCREENSHOT_TELEGRAM = "screenshot_telegram"
 
 
 class CarouselSlide(BaseModel):

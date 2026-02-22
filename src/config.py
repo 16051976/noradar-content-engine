@@ -20,6 +20,7 @@ class Settings(BaseSettings):
 
     # === Gemini API (Scripts) ===
     gemini_api_key: str = Field(default="", description="Clé API Google Gemini")
+    anthropic_api_key: str = Field(default="", env="ANTHROPIC_API_KEY")
     gemini_model: str = Field(default="gemini-2.0-flash", description="Modèle Gemini à utiliser")
     gemini_max_tokens: int = Field(default=2000, description="Tokens max pour la génération")
 

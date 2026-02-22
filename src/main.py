@@ -85,12 +85,10 @@ def produce(
     if script_only:
         orchestrator.script_only(video_format, theme)
     else:
-        orchestrator.produce_video(
+        orchestrator.produce_single(
             format=video_format,
             theme=theme,
-            background_image=background,
             upload=not no_upload,
-            voice_engine=voice,
         )
 
 
@@ -135,6 +133,17 @@ def weekly(
 
     orchestrator = ContentOrchestrator()
     orchestrator.produce_weekly(upload=not no_upload)
+
+
+@app.command()
+def weekly_v2(
+    no_upload: bool = typer.Option(False, "--no-upload", help="Ne pas uploader sur Drive"),
+):
+    """Produit une semaine : 7 blocs de 4 vidéos + 1 carrousel (35 pièces)."""
+    from src.pipeline.orchestrator import ContentOrchestrator
+
+    orchestrator = ContentOrchestrator()
+    orchestrator.produce_weekly_v2(upload=not no_upload)
 
 
 @app.command()

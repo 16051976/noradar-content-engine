@@ -242,3 +242,135 @@ class ContentOrchestrator:
         console.print(f"\n[bold green]{'═' * 50}[/bold green]")
         console.print(f"[bold green]Batch terminé : {completed}/{total} réussis, {failed} échecs[/bold green]")
         return carousels
+
+    def produce_weekly_v2(self, upload=True):
+        """
+        Produit une semaine : 7 blocs de 4 vidéos + 1 carrousel.
+        Total : 28 vidéos + 7 carrousels = 35 pièces.
+        Formatés séquentiellement pour repurpose dans l'ordre.
+        Jamais 2 formats vidéo identiques consécutifs.
+        """
+        from src.models import CarouselFormat
+
+        console.print("[bold cyan]═══════════════════════════════════════[/bold cyan]")
+        console.print("[bold cyan]   PRODUCTION WEEKLY V2 — 35 PIÈCES   [/bold cyan]")
+        console.print("[bold cyan]   28 vidéos + 7 carrousels            [/bold cyan]")
+        console.print("[bold cyan]═══════════════════════════════════════[/bold cyan]\n")
+
+        # Distribution vidéos (28 au total)
+        video_formats = [
+            VideoFormat.STORY_POV,
+            VideoFormat.STORY_POV,
+            VideoFormat.STORY_POV,
+            VideoFormat.STORY_POV,
+            VideoFormat.STORY_POV,
+            VideoFormat.STORY_POV,
+            VideoFormat.STORY_POV,
+            VideoFormat.DEBUNK,
+            VideoFormat.DEBUNK,
+            VideoFormat.DEBUNK,
+            VideoFormat.DEBUNK,
+            VideoFormat.DEBUNK,
+            VideoFormat.CAS_REEL,
+            VideoFormat.CAS_REEL,
+            VideoFormat.CAS_REEL,
+            VideoFormat.CAS_REEL,
+            VideoFormat.CAS_REEL,
+            VideoFormat.SCANDALE,
+            VideoFormat.SCANDALE,
+            VideoFormat.SCANDALE,
+            VideoFormat.TUTO,
+            VideoFormat.TUTO,
+            VideoFormat.TUTO,
+            VideoFormat.TEMOIGNAGE,
+            VideoFormat.TEMOIGNAGE,
+            VideoFormat.MYTHE,
+            VideoFormat.MYTHE,
+            VideoFormat.MYTHE,
+        ]
+
+        # Mélanger en évitant 2 formats identiques consécutifs
+        import random
+        random.shuffle(video_formats)
+        for _ in range(100):
+            has_consecutive = any(
+                video_formats[i] == video_formats[i + 1]
+                for i in range(len(video_formats) - 1)
+            )
+            if not has_consecutive:
+                break
+            random.shuffle(video_formats)
+
+        # Distribution carrousels (7 au total, formats variés)
+        carousel_formats = [
+            CarouselFormat.MYTHE_VS_FAIT,
+            CarouselFormat.CHECKLIST,
+            CarouselFormat.AVANT_APRES,
+            CarouselFormat.PROCESS,
+            CarouselFormat.DO_DONT,
+            CarouselFormat.FAQ,
+            CarouselFormat.STORY_CAS,
+        ]
+        random.shuffle(carousel_formats)
+
+        # Construction séquentielle : 4 vidéos + 1 carrousel × 7
+        sequence = []
+        for i in range(7):
+            for j in range(4):
+                sequence.append(("video", video_formats[i * 4 + j]))
+            sequence.append(("carousel", carousel_formats[i]))
+
+        console.print(f"[bold]Séquence de production ({len(sequence)} pièces) :[/bold]")
+        for idx, (kind, fmt) in enumerate(sequence, 1):
+            icon = "🎬" if kind == "video" else "📱"
+            console.print(f"  {idx:02d}. {icon} {fmt.value}")
+        console.print()
+
+        completed = 0
+        failed = 0
+
+        for idx, (kind, fmt) in enumerate(sequence, 1):
+            prefix = f"{idx:02d}"
+            if kind == "video":
+                console.print(f"\n[bold]═══ {prefix} — Vidéo [{fmt.value}] ═══[/bold]")
+                try:
+                    video = self.produce_video(fmt, upload=False)
+                    if video.video_path and upload:
+                        # Renommer avec préfixe séquentiel pour Drive
+                        new_name = f"{prefix}_{video.video_path.name}"
+                        new_path = video.video_path.parent / new_name
+                        video.video_path.rename(new_path)
+                        video.video_path = new_path
+                        self.gdrive.upload_video(video)
+                    completed += 1
+                except Exception as e:
+                    failed += 1
+                    console.print(f"[red]✗ Échec vidéo {prefix} : {e}[/red]")
+            else:
+                console.print(f"\n[bold]═══ {prefix} — Carrousel [{fmt.value}] ═══[/bold]")
+                try:
+                    carousel = self.produce_carousel(fmt, upload=False)
+                    if upload:
+                        self._upload_carousel_prefixed(carousel, prefix)
+                    completed += 1
+                except Exception as e:
+                    failed += 1
+                    console.print(f"[red]✗ Échec carrousel {prefix} : {e}[/red]")
+
+        console.print(f"\n[bold green]{'═' * 50}[/bold green]")
+        console.print(f"[bold green]Weekly V2 terminé : {completed}/{len(sequence)} réussis, {failed} échecs[/bold green]")
+
+    def _upload_carousel_prefixed(self, carousel, prefix: str):
+        """Upload les PNG d'un carrousel avec préfixe séquentiel."""
+        from src.models import Platform
+        instagram_paths = carousel.output_paths.get(Platform.INSTAGRAM.value, [])
+        for img_path in instagram_paths:
+            path = Path(img_path)
+            if path.exists():
+                new_name = f"{prefix}_{path.name}"
+                new_path = path.parent / new_name
+                path.rename(new_path)
+                try:
+                    self.gdrive.upload_file(new_path)
+                except Exception as e:
+                    console.print(f"[red]Upload échoué ({new_path.name}): {e}[/red]")

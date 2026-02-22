@@ -4,11 +4,8 @@ Générateur de scripts avec Google Gemini API.
 
 import json
 from typing import Optional
-import google.generativeai as genai
-from google.api_core.exceptions import ResourceExhausted, ServiceUnavailable, DeadlineExceeded
+import anthropic
 from rich.console import Console
-
-from src.utils.retry import with_retry
 
 from src.config import settings
 from src.models import Script, VideoFormat
@@ -63,28 +60,34 @@ RÈGLES DE COPYWRITING :
 3. DURÉE : 15-20 secondes MAX (80-100 mots)
 4. TUTOIEMENT : Utilise "j'" / "tu", jamais "vous" / "nous"
 5. CTA : Toujours "lien en bio" + gimmick "Conçu par des avocats. Exécuté par une IA."
-6. CONCLUSION POSITIVE OBLIGATOIRE : TOUJOURS finir sur un succès ("amende annulée", "points intacts", "classement sans suite")
+6. CONCLUSION POSITIVE OBLIGATOIRE : TOUJOURS finir sur un succès
 
 ═══════════════════════════════════════════════════════════════
-RÈGLES POUR LA CONCLUSION / CTA :
+ANGLES ÉMOTIONNELS — CHOISIS UN OBLIGATOIREMENT :
 ═══════════════════════════════════════════════════════════════
-- La conclusion doit TOUJOURS être POSITIVE et CONFIANTE
-- Le narrateur a RÉUSSI à contester son amende
-- 99% des contestations aboutissent à une annulation
-- Le conducteur GARDE ses points
-- JAMAIS de doute ("je ne sais pas si...", "on verra bien...", "j'espère que...")
-- TOUJOURS affirmatif ("ça a marché", "amende annulée", "j'ai gardé mes points")
+RAGE/INJUSTICE    → "135€ pour 7 km/h de trop. Absurde."
+SOULAGEMENT       → "J'allais payer 135€. J'ai payé 34€. Amende annulée."
+PROVOCATION       → "Tu paies tes amendes ? T'as tort."
+CHOC/RÉVÉLATION   → "Personne m'avait dit qu'on pouvait faire ça."
+COMPLICITÉ        → "Un pote m'a passé le bon plan. Je te le passe."
 
-EXEMPLES de bonnes conclusions :
-- "Résultat ? Amende annulée. Mes points sont intacts."
-- "2 semaines plus tard : classement sans suite. 0 point perdu."
-- "L'IA a fait le travail. Moi j'ai gardé mon permis."
-- "34€ pour garder mes 4 points ? Meilleur investissement de ma vie."
+Indique l'angle choisi dans le champ "hook_emotion" du JSON.
 
-EXEMPLES de MAUVAISES conclusions (INTERDITES) :
-- "Je ne sais pas si ça va marcher..."
-- "On verra bien ce que ça donne..."
-- "J'espère que ça passera..."
+═══════════════════════════════════════════════════════════════
+HOOKS QUI CARTONNENT (patterns prouvés) :
+═══════════════════════════════════════════════════════════════
+CONFESSION+CHIFFRE  → "J'ai payé 270€ d'amendes cette année. La dernière, j'aurais dû contester."
+RÉSULTAT IMPOSSIBLE → "135€ d'amende. 60 secondes. 0€ payé."
+PROVOCATION DIRECTE → "Tu paies tes amendes sans réfléchir ? Stop."
+INJUSTICE CONCRÈTE  → "Flashé à 83 au lieu de 80. 3 points en moins. Pour 3 km/h."
+DÉCOUVERTE TARDIVE  → "J'ai su trop tard que cette amende était contestable."
+
+HOOKS INTERDITS (trop vus, trop génériques) :
+❌ "X% des conducteurs font cette erreur"
+❌ "La vérité sur les amendes"
+❌ "Ce que personne ne te dit"
+❌ "Tu savais que..."
+❌ Toute reformulation de ces patterns
 
 ═══════════════════════════════════════════════════════════════
 DÉTAILS OBLIGATOIRES DANS CHAQUE SCRIPT :
@@ -438,18 +441,20 @@ class ScriptGenerator:
     """Génère des scripts vidéo via Gemini API."""
 
     def __init__(self):
-        if not settings.gemini_api_key:
-            raise ValueError("GEMINI_API_KEY non configurée dans .env")
-
-        genai.configure(api_key=settings.gemini_api_key)
-        self.model = genai.GenerativeModel(settings.gemini_model)
-        # Anti-doublon : hooks déjà générés dans cette session
+        if not settings.anthropic_api_key:
+            raise ValueError("ANTHROPIC_API_KEY non configurée dans .env")
+        self.client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
         self._generated_hooks: list[str] = []
 
-    @with_retry(exceptions=(ResourceExhausted, ServiceUnavailable, DeadlineExceeded))
-    def _call_gemini_api(self, prompts, generation_config):
-        """Appel API Gemini avec retry automatique."""
-        return self.model.generate_content(prompts, generation_config=generation_config)
+    def _call_claude_api(self, system: str, user: str) -> str:
+        message = self.client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=1024,
+            temperature=1.0,
+            system=system,
+            messages=[{"role": "user", "content": user}],
+        )
+        return message.content[0].text
 
     def generate(
         self,
@@ -590,16 +595,7 @@ class ScriptGenerator:
             console.print(f"[blue]Génération script {format.value} (angle: {chosen_angle})...[/blue]")
 
             try:
-                response = self._call_gemini_api(
-                    [SYSTEM_PROMPT, user_prompt],
-                    generation_config=genai.GenerationConfig(
-                        max_output_tokens=settings.gemini_max_tokens,
-                        temperature=0.95,  # Créativité élevée pour variabilité
-                    ),
-                )
-
-                # Extraction du JSON
-                response_text = response.text.strip()
+                response_text = self._call_claude_api(SYSTEM_PROMPT, user_prompt).strip()
 
                 # Nettoyer si wrapped dans ```json
                 if response_text.startswith("```"):
