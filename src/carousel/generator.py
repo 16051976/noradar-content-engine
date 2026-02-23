@@ -164,6 +164,10 @@ CHIFFRES UTILISABLES :
 - Montants d'amendes : 90€, 135€, 375€
 - Points : 1 à 6 points par infraction
 
+RÈGLE ABSOLUE : tous les chiffres doivent concerner DIRECTEMENT NoRadar ou les amendes radar.
+Chiffres autorisés uniquement : 135€ (amende), 34€ (prix NoRadar), 3 points (retrait moyen), 60s (délai contestation), 90% (taux succès), 4 conducteurs sur 5 (ne contestent pas).
+INTERDIT : inventer des montants, parler d'assurance, de coûts indirects.
+
 TON : Impact, surprise. Chaque chiffre doit faire réagir.""",
 
     CarouselFormat.AVANT_APRES: """FORMAT : SANS / AVEC NORADAR
@@ -418,6 +422,23 @@ AVANT_APRES_POOL = [
     ("tout le monde paie", "sans réfléchir", "certains contestent", "et gagnent"),
 ]
 
+CHIFFRE_CHOC_HOOKS = [
+    "Flashé par un radar ? Ces chiffres te concernent.",
+    "Avant de payer ton amende radar. Lis ça.",
+    "Ce que ton amende radar te coûte vraiment.",
+    "Tu as reçu un PV radar ? Ces chiffres vont te choquer.",
+    "Amende radar : les chiffres que tu dois connaître.",
+]
+
+CHIFFRE_CHOC_POOL = [
+    ("135€", "Tu as payé sans essayer.", "Automatiquement."),
+    ("34€", "C'est tout ce que ça coûtait", "d'essayer."),
+    ("3 points", "Perdus.", "Sans même contester."),
+    ("4 sur 5", "Paient.", "Sans réfléchir."),
+    ("60 secondes", "C'est le temps", "qu'il fallait."),
+    ("0€", "Si ça rate.", "Tu récupères tout."),
+]
+
 
 # ══════════════════════════════════════════════════════
 # CLASSE PRINCIPALE
@@ -457,6 +478,23 @@ class CarouselGenerator:
         Returns:
             Un objet Carousel avec toutes les slides.
         """
+        # CHIFFRE_CHOC : pool hardcodé, pas d'appel API
+        if format == CarouselFormat.CHIFFRE_CHOC:
+            hook = random.choice(CHIFFRE_CHOC_HOOKS)
+            pairs = random.sample(CHIFFRE_CHOC_POOL, 4)
+            slides = [
+                CarouselSlide(icon="", title=hook, body="", label=""),
+                *[CarouselSlide(icon="", title=p[0], label=p[1], body=p[2]) for p in pairs],
+                CarouselSlide(icon="", title="Et toi ?", body="Lien en bio → noradar.app | 34€, remboursé si ça rate"),
+            ]
+            carousel = Carousel(format=format, title=hook, slides=slides)
+            self._generated_hooks.append(hook)
+            console.print(
+                f"[green]Carrousel CHIFFRE_CHOC généré : {hook} "
+                f"({len(slides)} slides)[/green]"
+            )
+            return carousel
+
         max_attempts = 3
 
         for attempt in range(max_attempts):

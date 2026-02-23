@@ -94,16 +94,9 @@ def _slide_hook(slide: CarouselSlide, num: int, total: int, w: int, h: int) -> s
         hook_size = int(hook_size * 0.60)
     css = _base_css(w, h)
     els = _els(num, total)
-    bg_word = slide.title.split()[0].upper() if slide.title else "AMENDE"
     return f"""<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
 {css}
 body{{display:flex;flex-direction:column;justify-content:flex-end;padding:{s['pad']};}}
-.bg-word{{
-  position:absolute;top:0;left:-10px;right:0;
-  font-family:'Syne',sans-serif;font-size:{s['hook'] + 60}px;font-weight:800;
-  color:rgba(247,127,0,0.06);line-height:1;pointer-events:none;
-  white-space:nowrap;overflow:hidden;
-}}
 .accent-line{{width:40px;height:4px;background:{COLORS['accent']};border-radius:2px;margin-bottom:16px;}}
 .htitle{{
   font-family:'Syne',sans-serif;font-size:{hook_size}px;font-weight:800;
@@ -114,7 +107,6 @@ body{{display:flex;flex-direction:column;justify-content:flex-end;padding:{s['pa
   font-size:11px;font-weight:800;color:{COLORS['accent']};letter-spacing:2px;z-index:10;
 }}
 </style></head><body>
-<div class="bg-word">{bg_word}</div>
 {els}
 <div class="swipe">SWIPE →</div>
 <div class="wrap">
@@ -199,44 +191,46 @@ body{{display:flex;flex-direction:column;justify-content:center;padding:{s['pad'
 
 
 def _slide_chiffre(slide: CarouselSlide, num: int, total: int, w: int, h: int) -> str:
-    font_import = "@import url('https://fonts.googleapis.com/css2?family=Syne:wght@700;800;900&family=DM+Sans:wght@400;500;700&display=swap');"
-    pad_v = int(h * 0.062)
-    pad_h = int(w * 0.085)
-    pad_b = int(h * 0.12)
+    font_import = "@import url('https://fonts.googleapis.com/css2?family=Inter:wght@700;800;900&family=DM+Sans:wght@400;600;700&display=swap');"
+    pad_h = int(w * 0.08)
     nr_sz = int(w * 0.022)
     dot_sz = int(w * 0.015)
     dot_gap = int(w * 0.012)
-    block_r = int(w * 0.046)
-    block_pv = int(h * 0.062)
-    block_ph = int(w * 0.069)
-    block_mb = int(h * 0.043)
-    ctx_sz = int(w * 0.035)
-    big_sz = int(w * 0.146)
-    unit_sz = int(w * 0.035)
-    label_sz = int(w * 0.046)
-    is_green = slide.label_color == "green"
-    block_bg = "rgba(16,185,129,0.06)" if is_green else "rgba(247,127,0,0.06)"
-    block_border = "rgba(16,185,129,0.12)" if is_green else "rgba(247,127,0,0.12)"
-    ctx_color = "rgba(16,185,129,0.6)" if is_green else "rgba(247,127,0,0.6)"
-    big_color = "#10B981" if is_green else ""
-    big_style = f"color:{big_color};" if is_green else "background:linear-gradient(135deg,#f77f00,#ff4d4d);-webkit-background-clip:text;-webkit-text-fill-color:transparent;"
+    chiffre = slide.title or ""
+    line1 = slide.label or ""
+    line2 = slide.body or ""
+    chiffre_sz = int(w * 0.28) if len(chiffre) <= 3 else int(w * 0.22) if len(chiffre) <= 5 else int(w * 0.16) if len(chiffre) <= 8 else int(w * 0.12)
     dots_html = "".join([
         f'<div style="width:{dot_sz}px;height:{dot_sz}px;border-radius:50%;background:{"#f77f00" if i+1==num else "rgba(255,255,255,0.1)"};"></div>'
         for i in range(total)
     ])
+    if num == 1:
+        title_text = slide.title or "Flashé par un radar ? Ces chiffres te concernent."
+        hook_size = int(w * 0.082) if len(title_text) > 35 else int(w * 0.096) if len(title_text) > 20 else int(w * 0.11)
+        return f"""<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
+{font_import}
+*{{margin:0;padding:0;box-sizing:border-box;}}
+body{{width:{w}px;height:{h}px;background:#000000;font-family:'DM Sans',sans-serif;display:flex;flex-direction:column;justify-content:center;padding:0 {pad_h}px;position:relative;overflow:hidden;}}
+</style></head><body>
+<div style="position:absolute;top:{int(h*0.04)}px;left:{pad_h}px;font-size:{nr_sz}px;font-weight:800;letter-spacing:3px;color:rgba(247,127,0,0.4);">NR | NORADAR</div>
+<div style="display:flex;flex-direction:column;gap:{int(h*0.025)}px;">
+  <div style="font-family:'Inter',sans-serif;font-size:{hook_size}px;font-weight:900;line-height:1.05;color:#FFFFFF;letter-spacing:-1px;">{title_text}</div>
+</div>
+<div style="position:absolute;bottom:{int(h*0.04)}px;left:{pad_h}px;display:flex;gap:{dot_gap}px;">{dots_html}</div>
+</body></html>"""
     return f"""<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
 {font_import}
 *{{margin:0;padding:0;box-sizing:border-box;}}
-body{{width:{w}px;height:{h}px;background:#0D0D0D;font-family:'DM Sans',sans-serif;display:flex;flex-direction:column;justify-content:center;padding:{pad_v}px {pad_h}px {pad_b}px;position:relative;}}
+body{{width:{w}px;height:{h}px;background:#000000;font-family:'DM Sans',sans-serif;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;padding:0 {pad_h}px;position:relative;overflow:hidden;}}
 </style></head><body>
-<div style="position:absolute;top:{int(h*0.04)}px;left:{pad_h}px;font-size:{nr_sz}px;font-weight:800;letter-spacing:3px;color:rgba(247,127,0,0.5);font-family:'Syne',sans-serif;">NR | NORADAR</div>
-<div style="position:absolute;top:{int(h*0.04)}px;right:{pad_h}px;font-size:{nr_sz}px;color:rgba(255,255,255,0.12);">{num}/{total}</div>
-<div style="background:{block_bg};border:1px solid {block_border};border-radius:{block_r}px;padding:{block_pv}px {block_ph}px;margin-bottom:{block_mb}px;display:flex;flex-direction:column;align-items:center;text-align:center;">
-  <div style="font-size:{ctx_sz}px;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:{ctx_color};margin-bottom:{int(h*0.03)}px;">{slide.label or ""}</div>
-  <div style="font-family:'Syne',sans-serif;font-size:{big_sz}px;font-weight:900;line-height:1;{big_style}">{slide.title}</div>
-  <div style="font-size:{unit_sz}px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:rgba(255,255,255,0.25);margin-top:{int(h*0.012)}px;">{slide.label_text if hasattr(slide, 'label_text') else ""}</div>
+<div style="position:absolute;top:{int(h*0.04)}px;left:{pad_h}px;font-size:{nr_sz}px;font-weight:800;letter-spacing:3px;color:rgba(247,127,0,0.4);font-family:'DM Sans',sans-serif;">NR | NORADAR</div>
+<div style="position:absolute;top:{int(h*0.04)}px;right:{pad_h}px;font-size:{nr_sz}px;color:rgba(255,255,255,0.1);">{num}/{total}</div>
+<div style="display:flex;flex-direction:column;gap:{int(h*0.02)}px;">
+  <div style="font-family:'Inter',sans-serif;font-size:{chiffre_sz}px;font-weight:900;color:#F77F00;line-height:0.95;letter-spacing:-2px;">{chiffre}</div>
+  <div style="width:{int(w*0.15)}px;height:3px;background:#F77F00;border-radius:2px;"></div>
+  <div style="font-family:'Inter',sans-serif;font-size:{int(w*0.065)}px;font-weight:700;color:#FFFFFF;line-height:1.2;margin-top:{int(h*0.01)}px;">{line1}</div>
+  <div style="font-family:'Inter',sans-serif;font-size:{int(w*0.065)}px;font-weight:700;color:rgba(255,255,255,0.5);line-height:1.2;">{line2}</div>
 </div>
-<div style="font-size:{label_sz}px;color:#777;line-height:1.55;padding-left:{int(w*0.046)}px;border-left:2px solid rgba(247,127,0,0.3);">{slide.body}</div>
 <div style="position:absolute;bottom:{int(h*0.04)}px;left:{pad_h}px;display:flex;gap:{dot_gap}px;">{dots_html}</div>
 </body></html>"""
 
@@ -645,7 +639,7 @@ def _render_slide_html(
     w: int,
     h: int,
 ) -> str:
-    if num == 1 and fmt not in (CarouselFormat.COUNTDOWN, CarouselFormat.SCREENSHOT_TELEGRAM, CarouselFormat.AVANT_APRES):
+    if num == 1 and fmt not in (CarouselFormat.COUNTDOWN, CarouselFormat.SCREENSHOT_TELEGRAM, CarouselFormat.AVANT_APRES, CarouselFormat.CHIFFRE_CHOC):
         return _slide_hook(slide, num, total, w, h)
     if num == total:
         return _slide_cta(slide, num, total, w, h)
