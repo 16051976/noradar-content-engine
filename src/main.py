@@ -314,5 +314,23 @@ def carousel(
         )
 
 
+@app.command()
+def analytics(
+    days: int = typer.Option(7, "--days", "-d", help="Nombre de jours à analyser"),
+    no_send: bool = typer.Option(False, "--no-send", help="Afficher le rapport sans l'envoyer sur Telegram"),
+):
+    """Rapport analytics TikTok → Telegram."""
+    from src.scripts.analytics import fetch_tiktok_videos, build_report, send_telegram_report
+
+    videos = fetch_tiktok_videos(days=days, dry_run=no_send)
+    console.print(f"[green]✓ {len(videos)} vidéos récupérées ({days} jours)[/green]")
+
+    report = build_report(videos, days=days)
+    console.print(f"\n{report}\n")
+
+    if not no_send:
+        send_telegram_report(report)
+
+
 if __name__ == "__main__":
     app()

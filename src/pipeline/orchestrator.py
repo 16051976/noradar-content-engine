@@ -11,6 +11,8 @@ from rich.console import Console
 from src.config import settings
 from src.models import BatchJob, Script, Video, VideoFormat, VideoStatus, WeeklyPlan
 from src.scripts.generator import ScriptGenerator
+from src.pipeline.validator import ScriptValidator
+from src.storage.content_store import is_duplicate_script
 
 console = Console()
 
@@ -29,10 +31,17 @@ class ContentOrchestrator:
 
     def __init__(self):
         self.script_generator = ScriptGenerator()
+        self._script_validator = None
         self._voice_generator = None
         self._video_pipeline = None
         self._gdrive = None
         self._used_backgrounds: list[str] = []
+
+    @property
+    def script_validator(self):
+        if self._script_validator is None:
+            self._script_validator = ScriptValidator()
+        return self._script_validator
 
     @property
     def voice_generator(self):
@@ -71,6 +80,25 @@ class ContentOrchestrator:
         self.script_generator.save_script(script)
         if settings.tracking_enabled:
             console.print(f"[cyan]🔗 Lien trackable : {script.telegram_link}[/cyan]")
+
+        # Validation qualité + anti-doublon
+        validation = self.script_validator.validate(script)
+        is_dup = is_duplicate_script(script)
+
+        if not validation.passed or is_dup:
+            reason = "doublon" if is_dup else f"score {validation.overall_score}/10"
+            console.print(f"[yellow]Script rejeté ({reason}), régénération...[/yellow]")
+            script = self.script_generator.generate(format, theme)
+            self.script_generator.save_script(script)
+            validation = self.script_validator.validate(script)
+            is_dup = is_duplicate_script(script)
+            if not validation.passed or is_dup:
+                reason = "doublon" if is_dup else f"score {validation.overall_score}/10"
+                raise RuntimeError(
+                    f"Script rejeté 2 fois ({reason}). "
+                    f"Derniers problèmes : {validation.issues}. Publication annulée."
+                )
+
         audio = self.voice_generator.generate_from_script(script, engine=voice_engine, voice_name=voice_name)
         video = self.video_pipeline.process(script, audio, background_image, used_backgrounds=self._used_backgrounds)
         if video.video_path:
@@ -347,15 +375,8 @@ class ContentOrchestrator:
                     failed += 1
                     console.print(f"[red]✗ Échec vidéo {prefix} : {e}[/red]")
             else:
-                console.print(f"\n[bold]═══ {prefix} — Carrousel [{fmt.value}] ═══[/bold]")
-                try:
-                    carousel = self.produce_carousel(fmt, upload=False)
-                    if upload:
-                        self._upload_carousel_prefixed(carousel, prefix)
-                    completed += 1
-                except Exception as e:
-                    failed += 1
-                    console.print(f"[red]✗ Échec carrousel {prefix} : {e}[/red]")
+                console.print(f"\n[bold]═══ {prefix} — Carrousel [{fmt.value}] ignoré ═══[/bold]")
+                continue
 
         console.print(f"\n[bold green]{'═' * 50}[/bold green]")
         console.print(f"[bold green]Weekly V2 terminé : {completed}/{len(sequence)} réussis, {failed} échecs[/bold green]")
@@ -371,6 +392,24 @@ class ContentOrchestrator:
                 new_path = path.parent / new_name
                 path.rename(new_path)
                 try:
-                    self.gdrive.upload_file(new_path)
+                    pdf_path = self._build_carousel_pdf(carousel, prefix)
+                    title = f"{prefix}_carousel_{carousel.format.value}"
+                    self.gdrive.upload_image(pdf_path, file_title=title, folder_name="NoRadar-Videos")
                 except Exception as e:
                     console.print(f"[red]Upload échoué ({new_path.name}): {e}[/red]")
+
+    def _build_carousel_pdf(self, carousel, prefix: str) -> Path:
+        from PIL import Image
+
+        carousel_dir = next(Path("outputs/carousels").glob(f"*{carousel.id}")) / "instagram"
+        if not carousel_dir.exists():
+            raise FileNotFoundError(f"Dossier instagram introuvable : {carousel_dir}")
+
+        png_files = sorted(carousel_dir.glob("*.png"))
+        if not png_files:
+            raise ValueError(f"Aucun PNG trouvé dans {carousel_dir}")
+
+        images = [Image.open(p).convert("RGB") for p in png_files]
+        pdf_path = Path("outputs/carousels") / f"{prefix}_carousel_{carousel.format.value}.pdf"
+        images[0].save(pdf_path, save_all=True, append_images=images[1:])
+        return pdf_path

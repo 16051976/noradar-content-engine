@@ -86,6 +86,9 @@ class Settings(BaseSettings):
     subtitle_outline_width: int = Field(default=5, description="Épaisseur du contour")
     subtitle_position: str = Field(default="center", description="Position (top/center/bottom)")
 
+    # === Redis (deduplication) ===
+    redis_url: str = Field(default="redis://localhost:6379", description="URL de connexion Redis")
+
     # === Production Settings ===
     batch_size: int = Field(default=5, description="Nombre de vidéos par batch")
     weekly_target: int = Field(default=30, description="Objectif de vidéos par semaine")
