@@ -19,6 +19,7 @@ from rich.console import Console
 console = Console()
 
 TIKTOK_API_BASE = "https://open.tiktokapis.com/v2"
+INSTAGRAM_API_BASE = "https://graph.instagram.com/v21.0"
 
 
 def _env(key: str) -> str:
@@ -75,6 +76,50 @@ def fetch_tiktok_videos(days: int = 7, max_count: int = 50, dry_run: bool = Fals
     return sorted(result, key=lambda x: x["views"], reverse=True)
 
 
+def fetch_instagram_videos(days: int = 7, max_count: int = 50) -> list[dict]:
+    """
+    Récupère les vidéos Instagram publiées sur les N derniers jours
+    via Instagram Graph API. Retourne une liste vide si le token est absent.
+    """
+    token = os.environ.get("INSTAGRAM_ACCESS_TOKEN", "")
+    if not token:
+        console.print("[dim]INSTAGRAM_ACCESS_TOKEN non configurée, skip Instagram[/dim]")
+        return []
+
+    since = datetime.now() - timedelta(days=days)
+
+    resp = httpx.get(
+        f"{INSTAGRAM_API_BASE}/me/media",
+        params={
+            "fields": "id,caption,timestamp,like_count,comments_count,media_type",
+            "limit": max_count,
+            "access_token": token,
+        },
+        timeout=30,
+    )
+    resp.raise_for_status()
+    media = resp.json().get("data", [])
+
+    result = []
+    for m in media:
+        if m.get("media_type") not in ("VIDEO", "REELS"):
+            continue
+        created = datetime.fromisoformat(m.get("timestamp", "").replace("Z", "+00:00")).replace(tzinfo=None)
+        if created < since:
+            continue
+        result.append({
+            "id": m.get("id", ""),
+            "title": (m.get("caption") or "")[:50],
+            "views": 0,
+            "likes": m.get("like_count", 0),
+            "comments": m.get("comments_count", 0),
+            "shares": 0,
+            "created": created.strftime("%d/%m"),
+        })
+
+    return sorted(result, key=lambda x: x["likes"], reverse=True)
+
+
 def build_report(videos: list[dict], days: int = 7) -> str:
     """Construit le message Telegram formaté."""
     if not videos:
@@ -128,13 +173,25 @@ def send_telegram_report(message: str) -> None:
 
 
 def run_weekly_report(days: int = 7) -> str:
-    """Pipeline complet : fetch TikTok → build rapport → envoi Telegram."""
-    console.print(f"[blue]Récupération des stats TikTok ({days} jours)...[/blue]")
-    videos = fetch_tiktok_videos(days=days)
-    console.print(f"[green]✓ {len(videos)} vidéos récupérées[/green]")
+    """Pipeline complet : fetch TikTok + Instagram → rapport → scores → Telegram."""
+    from src.analytics.performance import compute_scores, save_performance
 
-    report = build_report(videos, days=days)
+    console.print(f"[blue]Récupération des stats TikTok ({days} jours)...[/blue]")
+    tiktok = fetch_tiktok_videos(days=days)
+    console.print(f"[green]✓ {len(tiktok)} vidéos TikTok récupérées[/green]")
+
+    console.print(f"[blue]Récupération des stats Instagram ({days} jours)...[/blue]")
+    insta = fetch_instagram_videos(days=days)
+    console.print(f"[green]✓ {len(insta)} vidéos Instagram récupérées[/green]")
+
+    all_videos = tiktok + insta
+    report = build_report(all_videos, days=days)
     console.print(f"\n{report}\n")
+
+    # Calcul et sauvegarde des scores de performance
+    perf = compute_scores(tiktok, insta)
+    path = save_performance(perf)
+    console.print(f"[green]✓ Scores de performance sauvegardés → {path}[/green]")
 
     send_telegram_report(report)
     return report

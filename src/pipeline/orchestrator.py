@@ -172,36 +172,30 @@ class ContentOrchestrator:
     def produce_weekly(self, upload=False):
         """
         Produit une semaine complète de contenu (30 vidéos).
-        Distribution optimale des formats.
+        Distribution optimale des formats, ajustée par analytics si disponible.
         """
+        from src.analytics.performance import load_performance
+        from src.analytics.distribution import compute_distribution
+
         console.print("[bold cyan]═══════════════════════════════════════[/bold cyan]")
         console.print("[bold cyan]   PRODUCTION WEEKLY - 30 VIDÉOS      [/bold cyan]")
         console.print("[bold cyan]═══════════════════════════════════════[/bold cyan]\n")
-        
-        # Distribution hebdomadaire (basée sur settings.weekly_target)
+
         total = settings.weekly_target
-        
-        distribution = {
-            VideoFormat.STORY_POV: int(total * 0.27),    # 27% = 8 vidéos
-            VideoFormat.DEBUNK: int(total * 0.20),        # 20% = 6 vidéos
-            VideoFormat.CAS_REEL: int(total * 0.20),      # 20% = 6 vidéos
-            VideoFormat.SCANDALE: int(total * 0.13),      # 13% = 4 vidéos
-            VideoFormat.TUTO: int(total * 0.10),          # 10% = 3 vidéos
-            VideoFormat.TEMOIGNAGE: int(total * 0.05),    # 5% = 2 vidéos
-            VideoFormat.MYTHE: int(total * 0.05),         # 5% = 1 vidéo
-        }
-        
-        # Ajuster pour atteindre exactement le total
-        current_sum = sum(distribution.values())
-        if current_sum < total:
-            # Ajouter les vidéos manquantes au format le plus performant
-            distribution[VideoFormat.STORY_POV] += (total - current_sum)
-        
-        console.print("[bold]Distribution hebdomadaire :[/bold]")
+        performance = load_performance()
+
+        distribution = compute_distribution(total, performance)
+
+        if performance and performance.scores:
+            source = "basée sur analytics"
+        else:
+            source = "distribution par défaut"
+
+        console.print(f"[bold]Distribution hebdomadaire ({source}) :[/bold]")
         for fmt, count in distribution.items():
             console.print(f"  {fmt.value}: {count}")
         console.print(f"\n[bold]Total : {sum(distribution.values())} vidéos[/bold]\n")
-        
+
         return self.produce_batch(distribution, upload=upload)
 
     # ══════════════════════════════════════════════════════

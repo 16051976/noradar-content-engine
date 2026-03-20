@@ -585,6 +585,15 @@ class ScriptGenerator:
             if custom_instructions:
                 user_prompt += f"INSTRUCTIONS ADDITIONNELLES : {custom_instructions}\n\n"
 
+            # Injection feedback analytics (si performance.json disponible)
+            from src.analytics.performance import load_performance
+            perf = load_performance()
+            if perf and perf.winning_themes:
+                user_prompt += f"THÈMES QUI PERFORMENT CETTE SEMAINE : {', '.join(perf.winning_themes)}\n"
+                if perf.losing_themes:
+                    user_prompt += f"THÈMES À ÉVITER : {', '.join(perf.losing_themes)}\n"
+                user_prompt += "\n"
+
             # Anti-doublon : lister les hooks déjà utilisés
             if self._generated_hooks:
                 hooks_list = " | ".join(self._generated_hooks[-10:])
