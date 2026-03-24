@@ -1,5 +1,5 @@
 """
-Détection de doublons de scripts via Redis.
+Détection de doublons de scripts via Redis (SHA-256 sur full_text).
 """
 
 import hashlib
@@ -7,11 +7,10 @@ import redis
 from rich.console import Console
 
 from src.config import settings
-from src.models import Script
 
 console = Console()
 
-REDIS_KEY_PREFIX = "noradar:script:"
+REDIS_KEY_PREFIX = "content:scripts:"
 SCRIPT_TTL_SECONDS = 30 * 24 * 3600  # 30 jours
 
 
@@ -19,30 +18,24 @@ def _get_redis() -> redis.Redis:
     return redis.Redis.from_url(settings.redis_url, decode_responses=True)
 
 
-def _script_fingerprint(script: Script) -> str:
-    """Hash du hook normalisé pour détecter les doublons."""
-    normalized = script.hook.strip().lower()
-    return hashlib.sha256(normalized.encode()).hexdigest()[:16]
-
-
-def is_duplicate_script(script: Script) -> bool:
+def is_duplicate_script(full_text: str) -> bool:
     """
-    Vérifie si un script avec un hook similaire a déjà été produit.
-    Enregistre le script dans Redis s'il est nouveau.
+    Vérifie si un script identique a déjà été produit via SHA-256 du full_text.
+    Enregistre le hash dans Redis s'il est nouveau (TTL 30 jours).
 
     Returns:
-        True si le hook est un doublon, False sinon.
+        True si le script est un doublon, False sinon.
     """
     try:
         r = _get_redis()
-        fingerprint = _script_fingerprint(script)
-        key = f"{REDIS_KEY_PREFIX}{fingerprint}"
+        text_hash = hashlib.sha256(full_text.encode()).hexdigest()
+        key = f"{REDIS_KEY_PREFIX}{text_hash}"
 
         if r.exists(key):
-            console.print(f"[yellow]⚠ Doublon détecté (hook: {script.hook[:50]}...)[/yellow]")
+            console.print(f"[yellow]Doublon détecté (hash: {text_hash[:12]}...)[/yellow]")
             return True
 
-        r.setex(key, SCRIPT_TTL_SECONDS, script.hook)
+        r.setex(key, SCRIPT_TTL_SECONDS, "1")
         return False
 
     except redis.ConnectionError:
