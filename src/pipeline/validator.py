@@ -1,5 +1,6 @@
 """
 Validation qualité des scripts via Gemini API.
+Score 0-100 sur 5 critères, seuil d'approbation : 70.
 """
 
 import json
@@ -14,56 +15,61 @@ console = Console()
 
 VALIDATION_PROMPT = """Tu es un évaluateur qualité de scripts vidéo viraux pour NoRadar (IA juridique de contestation d'amendes radar).
 
-Évalue ce script sur 3 critères, chacun noté de 1 à 10 :
+Évalue ce script sur 5 critères, chacun noté de 0 à 20 :
 
-1. HOOK (accroche) : Est-ce que les 3 premières secondes stoppent le scroll ?
-   - Montant précis mentionné ?
-   - Situation concrète et relatable ?
-   - Pas un hook interdit (trop générique, déjà vu) ?
+1. MÉTHODE JURIDIQUE (0-20) : Le script ne mentionne AUCUNE méthode juridique précise
+   (pas d'articles de loi, pas de L.121-3, pas de motifs de contestation).
+   20 = aucune mention, 0 = méthode détaillée.
 
-2. COMPLIANCE : Le script respecte-t-il les règles métier ?
-   - Ne mentionne PAS la méthode juridique, les articles de loi, les motifs
-   - Ne mentionne PAS d'amendes non couvertes (stationnement, alcool, etc.)
-   - Mentionne bien : 34€, 60 secondes, Telegram, remboursement
-   - Finit sur un résultat POSITIF (amende annulée, points gardés)
-   - Finit par "Conçu par des avocats. Exécuté par une IA."
+2. CONCLUSION POSITIVE (0-20) : La conclusion est positive et affirmative.
+   Résultat concret (amende annulée, points gardés). Jamais de doute.
+   Finit par "Conçu par des avocats. Exécuté par une IA."
 
-3. ENGAGEMENT : Le script donne-t-il envie de regarder jusqu'au bout ?
-   - Structure narrative claire ?
-   - Ton authentique première personne ?
-   - CTA clair ?
+3. CTA CLAIR (0-20) : Call-to-action clair avec "lien en bio" ou Telegram.
+   Mentionne 34€, 60 secondes, remboursement.
+
+4. ORIGINALITÉ DU HOOK (0-20) : Le hook est original, pas générique.
+   Montant précis, situation concrète, accroche qui stoppe le scroll.
+
+5. CONFORMITÉ TIKTOK (0-20) : Pas de termes à risque de shadowban.
+   Pas de vocabulaire agressif, pas de promesses exagérées, pas de spam.
 
 SCRIPT À ÉVALUER :
 Format : {format}
 Hook : {hook}
 Body : {body}
 CTA : {cta}
+Full text : {full_text}
 
 Réponds UNIQUEMENT en JSON strict :
 {{
-    "hook_score": <1-10>,
-    "compliance_score": <1-10>,
-    "engagement_score": <1-10>,
-    "overall_score": <1-10>,
+    "methode_juridique": <0-20>,
+    "conclusion_positive": <0-20>,
+    "cta_clair": <0-20>,
+    "originalite_hook": <0-20>,
+    "conformite_tiktok": <0-20>,
+    "score": <0-100 somme des 5>,
     "issues": ["problème 1", "problème 2"],
-    "passed": <true si overall_score >= 6, false sinon>
+    "approved": <true si score >= 70, false sinon>
 }}
 """
 
 
 class ValidationResult(BaseModel):
-    hook_score: int
-    compliance_score: int
-    engagement_score: int
-    overall_score: int
+    methode_juridique: int
+    conclusion_positive: int
+    cta_clair: int
+    originalite_hook: int
+    conformite_tiktok: int
+    score: int
     issues: list[str]
-    passed: bool
+    approved: bool
 
 
 class ScriptValidator:
-    """Valide la qualité d'un script via Gemini."""
+    """Valide la qualité d'un script via Gemini. Seuil : 70/100."""
 
-    SCORE_THRESHOLD = 6
+    SCORE_THRESHOLD = 70
 
     def __init__(self):
         if not settings.gemini_api_key:
@@ -77,6 +83,7 @@ class ScriptValidator:
             hook=script.hook,
             body=script.body,
             cta=script.cta,
+            full_text=script.full_text,
         )
 
         response = self.model.generate_content(prompt)
@@ -92,10 +99,10 @@ class ScriptValidator:
         data = json.loads(text)
         result = ValidationResult(**data)
 
-        if result.passed:
-            console.print(f"[green]✓ Validation OK (score: {result.overall_score}/10)[/green]")
+        if result.approved:
+            console.print(f"[green]Validation OK (score: {result.score}/100)[/green]")
         else:
-            console.print(f"[yellow]✗ Validation échouée (score: {result.overall_score}/10)[/yellow]")
+            console.print(f"[yellow]Validation échouée (score: {result.score}/100)[/yellow]")
             for issue in result.issues:
                 console.print(f"  [yellow]- {issue}[/yellow]")
 
