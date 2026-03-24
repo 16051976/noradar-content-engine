@@ -83,17 +83,17 @@ class ContentOrchestrator:
 
         # Validation qualité + anti-doublon
         validation = self.script_validator.validate(script)
-        is_dup = is_duplicate_script(script)
+        is_dup = is_duplicate_script(script.full_text)
 
-        if not validation.passed or is_dup:
-            reason = "doublon" if is_dup else f"score {validation.overall_score}/10"
+        if not validation.approved or is_dup:
+            reason = "doublon" if is_dup else f"score {validation.score}/100"
             console.print(f"[yellow]Script rejeté ({reason}), régénération...[/yellow]")
             script = self.script_generator.generate(format, theme)
             self.script_generator.save_script(script)
             validation = self.script_validator.validate(script)
-            is_dup = is_duplicate_script(script)
-            if not validation.passed or is_dup:
-                reason = "doublon" if is_dup else f"score {validation.overall_score}/10"
+            is_dup = is_duplicate_script(script.full_text)
+            if not validation.approved or is_dup:
+                reason = "doublon" if is_dup else f"score {validation.score}/100"
                 raise RuntimeError(
                     f"Script rejeté 2 fois ({reason}). "
                     f"Derniers problèmes : {validation.issues}. Publication annulée."
